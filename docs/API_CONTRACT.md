@@ -89,6 +89,25 @@ No existe registro publico.
 - Las existencias iniciales no forman parte de `POST /catalog/products`: React
   crea ajustes auditados por variante en la sucursal elegida explicitamente.
 
+### Transferencias (vocabulario de Fase 5)
+
+Esta seccion fija el vocabulario persistido y del contrato. Los endpoints se
+habilitaran en las siguientes unidades de Fase 5; FastAPI seguira siendo la
+unica ruta operacional de datos.
+
+- Los folios de transferencia usan `TR-SUC-YEAR-NUMBER`; `TR` identifica el
+  recurso de transferencia entre sucursales.
+- Una transferencia recorre exclusivamente `draft`, `sent` y `received`.
+  Cada linea conserva `shipped_quantity`; al recibir conserva
+  `received_quantity` y `shortage_quantity`.
+- `received_quantity` nunca puede superar `shipped_quantity`, y
+  `shortage_quantity` representa exactamente la diferencia. Antes de recibir,
+  ambas cantidades de recepcion permanecen ausentes.
+- Enviar y recibir un `TR` producira movimientos inmutables
+  `transferencia_salida` y `transferencia_entrada`, respectivamente. Los
+  documentos no reemplazan a `StockEntry`, y `StockBalance` sigue siendo solo
+  la proyeccion bloqueable.
+
 ## Clientes y credito
 
 - `GET /clients` devuelve `credit_balance` derivado de `credit_entries`.

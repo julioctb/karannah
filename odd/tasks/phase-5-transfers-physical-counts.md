@@ -1,0 +1,282 @@
+# Phase 5 — Transfers and Physical Counts
+
+## Status
+
+- State: active
+- Route: organic development (ODD), delegated direct implementation
+- Repository branch at creation: `main`
+- Active feature branch: `feature/phase-5-transfers-counts`
+- Next task: `F5-01A`
+- Delivery strategy: `ask-on-risk`
+- Chain strategy: `stacked-to-main`, selected by the user
+- Engram mirror: pending; the current Engram session is already closed, while this repository copy remains authoritative
+- Forecast: approximately 1,700 authored changed lines across six reviewable work units after the user-selected transfer/count foundation split; generated files excluded
+
+## Objective
+
+Implement Phase 5 from `docs/PLAN.md`: auditable inter-branch transfers with retry-safe receiving differences, and branch-wide physical counts based on immutable inventory snapshots that finalize through audited stock movements.
+
+## Problem and why it matters
+
+Transfers and physical counts currently exist only as isolated frontend demo state. The operational backend has an immutable stock ledger and lockable stock-balance projection, but no persisted transfer or count documents. Without server-owned workflows, retries can duplicate stock, reception shortages cannot be reconciled, and count corrections are not auditable.
+
+## Accepted product decisions
+
+1. Sending a transfer debits the origin; receiving credits the destination only for quantities actually received.
+2. Reception may record shortages from zero through the shipped quantity; over-receipt is rejected.
+3. Physical counts cover the complete branch inventory snapshot for active variants with recorded stock at count start.
+4. Administrators and managers (`admin`, `encargado`) can create, send, receive, and finalize Phase 5 documents.
+5. Transfer folios use `TR-SUC-YEAR-NUMBER`; physical counts use `CF-SUC-YEAR-NUMBER`.
+6. Count-generated stock entries use movement type `conteo` and reference the `CF` document.
+7. Transfer shortages are persisted on transfer lines and reconciled by the paired origin-out and actual destination-in ledger entries; no synthetic destination stock is created.
+
+## Scope
+
+### Included
+
+- Persisted transfer documents and lines with draft, sent, and received states.
+- Atomic origin debit at send and atomic destination credit at receive.
+- Deterministic balance locking and non-negative origin stock enforcement.
+- Retry-safe send, receive, and count finalization using existing idempotency semantics.
+- Persisted shipped, received, and shortage quantities.
+- Branch-wide physical-count snapshots and editable observed quantities before finalization.
+- One-transaction count finalization with immutable audited stock entries.
+- FastAPI schemas/routes, SQLAlchemy models, draft Alembic schema, backend tests, API contract documentation, React API integration, and replacement of transfer/count demo state.
+
+### Out of scope
+
+- Supabase access or credentials.
+- Partial or category-scoped cycle counts.
+- Reception quantities above shipped quantities.
+- Transfer cancellation after dispatch.
+- New frontend test tooling.
+- Phase 8 PostgreSQL concurrency certification beyond focused Phase 5 behavior checks.
+
+## Constraints and invariants
+
+- PostgreSQL local remains the operational target; FastAPI is the only operational data path.
+- `StockEntry` remains immutable and is the audit source of truth; `StockBalance` remains a lockable projection.
+- Every balance update and its ledger entry occur in the same database transaction.
+- Multi-row stock locks use deterministic `(branch_id, variant_id)` ordering.
+- No operation may create a negative balance.
+- Every branch parameter is authorized through existing branch-visibility dependencies.
+- A repeated idempotency key with the same payload returns the stored result; a changed payload returns `409`.
+- Models and the Phase 5 draft migration must stay structurally aligned.
+- Technical artifacts and internal identifiers use English; existing user-facing Spanish UI is preserved.
+
+## Test and verification mode
+
+- Explicit repository TDD configuration: not found.
+- Effective TDD mode: strict TDD, explicitly selected by the user for Phase 5.
+- Required cycle: observed RED before implementation, then GREEN and REFACTOR; never infer or fabricate evidence.
+- Backend focused runner: `.venv/bin/pytest -q tests/test_inventory_phase5.py` with cwd `backend/`.
+- Backend full runner: `.venv/bin/pytest -q` with cwd `backend/`.
+- Backend lint runner: `.venv/bin/ruff check --no-cache app tests alembic` with cwd `backend/`.
+- Frontend runner: `npm run build` from `frontend/`; no frontend test runner is currently configured.
+- Verification evidence must record exact observed results; failed, unavailable, or skipped checks remain explicit.
+
+## Work units
+
+### F5-00 — Resolve execution setup
+
+- [x] Complete delegated architecture mapping.
+- [x] Capture product decisions for transfer timing, reception differences, count scope, and roles.
+- [x] Resolve effective TDD mode: strict TDD selected explicitly by the user.
+- [x] Select the chain strategy required by the forecasted review workload: `stacked-to-main`.
+- [x] Create `feature/phase-5-transfers-counts` before source implementation.
+- Route: parent coordination and Git state only.
+- Checks: clean status before branch creation and task-document synchronization.
+- Evidence: mapping, product decisions, strict TDD, `stacked-to-main`, and branch creation were observed; `git status --short --branch` showed only the intended untracked `odd/` task artifact.
+
+### F5-01A — Persist transfer document foundations
+
+- [x] Keep only transfer lifecycle enums, models, relationships, corrected quantity constraints, and exports in this review unit.
+- [x] Replace the combined draft migration with transfer-only `0007_phase5_transfers.py`, aligned with the transfer models.
+- [x] Keep database-backed transfer quantity tests and instantiated migration/model alignment coverage.
+- [x] Keep only `TR` lifecycle and transfer quantity vocabulary in the API contract for this unit.
+- [x] Remove physical-count foundations from the current candidate without weakening the verified transfer correction; they move intact in intent to `F5-01B`.
+- Route: delegated writer.
+- Trigger evidence: the user selected one honest transfer/count split after the verified combined candidate reached 664 authored changed lines.
+- Candidate surfaces:
+  - `backend/app/models/inventory.py`
+  - `backend/app/models/__init__.py`
+  - `backend/alembic/versions/0007_phase5_transfers_counts.py` (remove)
+  - `backend/alembic/versions/0007_phase5_transfers.py` (create)
+  - `backend/tests/test_inventory_phase5.py`
+  - `docs/API_CONTRACT.md`
+- Checks:
+  - focused Phase 5 tests
+  - full backend tests
+  - Ruff
+- Forecast: target one cohesive review unit under about 400 authored changed lines without code-golf or omitted proof.
+- Evidence:
+  - The original combined foundations candidate completed strict TDD, correction TDD, independent verification, and parent spot-check before the size split.
+  - The combined candidate was 664 authored changed lines; the user explicitly selected transfer/count separation instead of `size:exception`.
+  - Verified transfer defect correction to preserve: a non-null reception requires a non-null shortage exactly equal to shipped minus received; both fields may be null before reception.
+  - Split implementation completed by delegated writer: physical-count foundations removed, `0007_phase5_transfers.py` created, old combined migration removed, transfer-only tests/docs retained.
+  - Writer verification: `cd backend && .venv/bin/pytest -q tests/test_inventory_phase5.py` → 11 passed in 0.23s; `cd backend && .venv/bin/pytest -q` → 102 passed in 3.25s; `cd backend && .venv/bin/ruff check --no-cache app tests alembic` → all checks passed.
+  - Native risk assessment was unassessable because untracked files require explicit declaration; risk-gated plan required independent verification.
+  - Independent verification verdict: PASS, no blocking findings; focused tests 11 passed in 0.24s, full backend 102 passed in 3.76s, Ruff all checks passed.
+  - Parent spot-check found no remaining physical-count model/test/API vocabulary in the F5-01A candidate and confirmed transfer migration identity/scope.
+  - Native review lineage `review-95cd850548171248` was authorized, captured with `review-reliability`, approved, and acknowledged; authority burned with evidence `gentle-ai.review-acknowledged/v1` for target `sha256:b8c5c7f4896a9c02d1ee7b3032ee6c84c05e58d30469c8397e22c51c8dd639ee`.
+  - Non-blocking review advisories: folio format is not fully enforced at database level, and receipt state/timestamp coupling is not fully enforced at database level; both are informational and separate later work.
+  - Work-unit commit remains pending because commit requires explicit user authorization in this harness.
+
+### F5-01B — Persist physical-count document foundations
+
+- [ ] Add physical-count lifecycle enums, models, relationships, quantity constraints, and exports after `F5-01A` closes.
+- [ ] Add count-only `0008_phase5_physical_counts.py` with `0007_phase5_transfers` as its predecessor.
+- [ ] Add database-backed count quantity tests and instantiated migration/model alignment coverage under strict TDD.
+- [ ] Add only `CF` lifecycle and count quantity vocabulary to the API contract.
+- Route: delegated writer.
+- Trigger evidence: user-selected review split creates a second cohesive multi-file foundation unit.
+- Candidate surfaces:
+  - `backend/app/models/inventory.py`
+  - `backend/app/models/__init__.py`
+  - `backend/alembic/versions/0008_phase5_physical_counts.py`
+  - `backend/tests/test_inventory_phase5.py`
+  - `docs/API_CONTRACT.md`
+- Checks:
+  - focused Phase 5 tests
+  - full backend tests
+  - Ruff
+- Forecast: ~280 authored changed lines.
+- Evidence: pending after `F5-01A`.
+
+### F5-02 — Implement auditable, retry-safe transfers
+
+- [ ] Add reusable document-counter, idempotency, and deterministic stock-lock helpers without creating duplicate sources of truth.
+- [ ] Implement transfer creation, listing/detail, sending, and receiving.
+- [ ] Debit shipped quantities from origin atomically and append `transferencia_salida` entries.
+- [ ] Credit actual received quantities at destination atomically and append `transferencia_entrada` entries.
+- [ ] Persist shortages, reject over-receipt, and make send/receive retries idempotent.
+- [ ] Enforce role and branch visibility rules.
+- [ ] Add focused lifecycle, authorization, ledger, balance, and retry tests.
+- [ ] Update the API contract with requests, responses, errors, and idempotency behavior.
+- Route: delegated writer.
+- Trigger evidence: multi-file domain/API implementation with transactional behavior.
+- Candidate surfaces:
+  - `backend/app/services/inventory.py`
+  - `backend/app/services/pos.py`
+  - `backend/app/api/v1/inventory.py`
+  - `backend/app/schemas/inventory.py`
+  - `backend/tests/test_inventory_phase5.py`
+  - `docs/API_CONTRACT.md`
+- Checks:
+  - focused Phase 5 tests
+  - full backend tests
+  - Ruff
+- Forecast: ~450 authored changed lines; one honest review slice may exceed the heuristic if transactional cohesion requires it.
+- Evidence: pending.
+
+### F5-03 — Implement snapshot-based physical counts
+
+- [ ] Start a count by snapshotting the branch inventory into immutable baseline quantities.
+- [ ] Allow observed quantities to be recorded only while the count is open.
+- [ ] Finalize once, lock affected balances deterministically, and append `conteo` entries for differences.
+- [ ] Update balance projections in the same transaction and reject stale or repeated mutations safely.
+- [ ] Enforce role and branch visibility rules.
+- [ ] Add focused snapshot, finalization, ledger, balance, authorization, and retry tests.
+- [ ] Update the API contract.
+- Route: delegated writer.
+- Trigger evidence: multi-file transactional domain/API implementation.
+- Candidate surfaces:
+  - `backend/app/services/inventory.py`
+  - `backend/app/api/v1/inventory.py`
+  - `backend/app/schemas/inventory.py`
+  - `backend/tests/test_inventory_phase5.py`
+  - `docs/API_CONTRACT.md`
+- Checks:
+  - focused Phase 5 tests
+  - full backend tests
+  - Ruff
+- Forecast: ~400 authored changed lines.
+- Evidence: pending.
+
+### F5-04 — Connect frontend API and application state
+
+- [ ] Add transfer and physical-count API adapters and response mappers.
+- [ ] Preserve idempotency keys across uncertain retries and rotate them after validation errors.
+- [ ] Wire application actions and refresh behavior.
+- [ ] Mark transfer and physical-count views as API-backed.
+- [ ] Prefer screen-local loading for Phase 5 data instead of expanding the global initial preload.
+- Route: delegated writer.
+- Trigger evidence: coordinated non-trivial changes across three frontend modules.
+- Candidate surfaces:
+  - `frontend/src/lib/api.js`
+  - `frontend/src/App.jsx`
+  - `frontend/src/domain/appModel.js`
+- Checks:
+  - frontend production build
+- Forecast: ~250 authored changed lines.
+- Evidence: pending.
+
+### F5-05 — Replace transfer and count demo screens
+
+- [ ] Replace local transfer demo data/state with persisted list, detail, create, send, and receive flows.
+- [ ] Replace local physical-count demo data/state with start, capture, and finalize flows.
+- [ ] Preserve loading, empty, error, retry, and permission-aware states.
+- [ ] Remove migrated demo datasets so the API remains the sole source of truth.
+- [ ] Update frontend documentation for the operational workflows.
+- Route: delegated writer.
+- Trigger evidence: non-trivial UI/API integration across multiple files.
+- Candidate surfaces:
+  - `frontend/src/screens/index.jsx`
+  - `frontend/src/lib/api.js`
+  - `frontend/src/App.jsx`
+  - `frontend/src/domain/appModel.js`
+  - `frontend/README.md`
+- Checks:
+  - frontend production build
+  - full backend tests
+  - Ruff
+- Forecast: ~300 authored changed lines.
+- Evidence: pending.
+
+### F5-06 — Close Phase 5 with integrated verification
+
+- [ ] Run all applicable backend and frontend checks.
+- [ ] Confirm retry evidence shows no duplicate stock movements.
+- [ ] Confirm transfer and count documents reconcile to ledger entries and balances.
+- [ ] Confirm no Phase 5 demo dataset remains an operational source of truth.
+- [ ] Update `docs/PLAN.md` and `docs/CHANGELOG.md` only after observed completion evidence.
+- Route: delegated verification according to native risk assessment, plus parent structural readback.
+- Trigger evidence: verification commands and cross-layer behavior exceed a local 1–3-file check.
+- Candidate surfaces:
+  - `docs/PLAN.md`
+  - `docs/CHANGELOG.md`
+- Checks:
+  - full backend tests
+  - Ruff
+  - frontend production build
+- Forecast: documentation-only authored delta after verification.
+- Evidence: pending.
+
+## Acceptance criteria
+
+- Sending a valid transfer reduces origin balances exactly once and records matching immutable outbound entries.
+- Receiving a sent transfer increases destination balances exactly once for actual received quantities and records matching immutable inbound entries.
+- Repeating send, receive, or finalize with the same key/body does not duplicate stock, ledger entries, or document transitions.
+- Reusing an idempotency key with a changed body returns `409`.
+- Reception cannot exceed shipped quantities; shortages remain visible and reconcilable per line.
+- Starting a count freezes baseline quantities that do not change when later inventory operations occur.
+- Finalizing a count applies every non-zero difference once through immutable `conteo` movements and matching balance updates.
+- Unauthorized roles and inaccessible branches cannot inspect or mutate the documents.
+- The transfer and physical-count screens use FastAPI data and contain no operational hardcoded datasets.
+- Backend tests, Ruff, and the frontend production build pass with exact evidence recorded.
+
+## Progress and evidence
+
+- `F5-00` completed: repository mapping, product decisions, strict TDD selection, `stacked-to-main`, and feature branch setup are recorded.
+- Repository mapping completed by `gentle-ai-explore` with CodeGraph-first evidence.
+- Product decisions captured from the user before implementation.
+- Engram mirror is pending because the current memory session is already closed; the repository document was written and read back successfully.
+- The combined `F5-01` implementation and verification completed at 664 authored changed lines; the user selected a transfer/count split instead of `size:exception`.
+- `F5-01A` transfer-only foundations are implemented and independently verified; physical-count foundations remain pending as `F5-01B`.
+- The user-level subagent routing blocker was resolved with explicit authorization.
+- No work-unit commits exist yet because commit needs explicit user authorization.
+- Running authored line count: approximately 473 for the F5-01A source candidate, excluding this ODD task document.
+
+## Next step
+
+Get explicit authorization for the `F5-01A` work-unit commit, then commit the reviewed transfer-only foundation before starting `F5-01B`.

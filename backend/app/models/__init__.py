@@ -21,7 +21,14 @@ from app.models.catalog import (
 )
 from app.models.clients import Client, ClientType, CreditEntry, CreditMovementType
 from app.models.identity import Branch, Role, UserBranchAssignment, UserProfile
-from app.models.inventory import StockBalance, StockEntry, StockMovementType
+from app.models.inventory import (
+    StockBalance,
+    StockEntry,
+    StockMovementType,
+    StockTransfer,
+    StockTransferLine,
+    StockTransferStatus,
+)
 from app.models.repairs import Repair, RepairStatus
 from app.models.sales import (
     DiscountApproval,
@@ -69,6 +76,9 @@ __all__ = [
     "StockBalance",
     "StockEntry",
     "StockMovementType",
+    "StockTransfer",
+    "StockTransferLine",
+    "StockTransferStatus",
     "Subcategory",
     "Terminal",
     "UserBranchAssignment",
