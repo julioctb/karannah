@@ -122,14 +122,35 @@ No existe registro publico.
 - Los documentos no reemplazan a `StockEntry`; `StockBalance` sigue siendo solo
   la proyeccion bloqueable y ambos se actualizan en la misma transaccion.
 
-### Conteos fisicos (vocabulario de Fase 5)
+### Conteos fisicos
 
-- Los folios de conteo fisico usan `CF-SUC-YEAR-NUMBER`; `CF` identifica el
-  documento de conteo de inventario de una sucursal.
-- Un conteo fisico recorre exclusivamente `open` y `finalized`.
-- Cada linea conserva la captura inicial inmutable en `snapshot_quantity` y la
-  cantidad relevada en `observed_quantity`, que permanece ausente hasta que la
-  variante sea contada.
+- `POST /inventory/physical-counts` recibe `branch_id`, crea un conteo `open` y
+  responde `201`. Su folio usa `CF-SUC-YEAR-NUMBER` y sus lineas capturan en
+  `snapshot_quantity` cada variante activa que ya tenga un `StockBalance` en la
+  sucursal, incluidos saldos registrados en cero. Variantes inactivas o sin
+  saldo registrado quedan fuera.
+- `GET /inventory/physical-counts` lista los conteos de sucursales visibles y
+  `GET /inventory/physical-counts/{count_id}` devuelve su detalle. Un conteo
+  fuera del alcance responde `404`.
+- `PATCH /inventory/physical-counts/{count_id}/lines` recibe una lista parcial
+  no vacia de `variant_id` y `observed_quantity` no negativa. Solo modifica
+  `observed_quantity` mientras el conteo esta `open`; `snapshot_quantity` es
+  inmutable. Variantes duplicadas o ajenas responden `409` y un cuerpo invalido
+  responde `422` sin cambios parciales.
+- `POST /inventory/physical-counts/{count_id}/finalize` requiere
+  `Idempotency-Key`, todas las observaciones y un cuerpo con `note` opcional.
+  Bloquea los saldos actuales y aplica por linea la diferencia
+  `observed_quantity - current_balance.quantity`, conciliando el saldo con la
+  cantidad fisica observada sin reaplicar movimientos posteriores al snapshot.
+- Las diferencias distintas de cero crean movimientos inmutables `conteo` con
+  referencia igual al folio `CF` y el usuario finalizador. Una diferencia cero
+  no crea movimiento. Saldos y ledger se actualizan en la misma transaccion.
+- Repetir la misma clave y cuerpo devuelve la respuesta almacenada sin duplicar
+  movimientos; cambiar el cuerpo con la misma clave o usar una clave nueva tras
+  finalizar responde `409`.
+- Crear, listar, consultar, capturar y finalizar requiere rol `admin` o
+  `encargado` y visibilidad de la sucursal. Un conteo recorre exclusivamente
+  `open` y `finalized`.
 
 ## Clientes y credito
 

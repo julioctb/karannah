@@ -5,7 +5,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.models.inventory import StockMovementType, StockTransferStatus
+from app.models.inventory import PhysicalCountStatus, StockMovementType, StockTransferStatus
 
 
 class StockLevel(BaseModel):
@@ -108,3 +108,47 @@ class TransferRead(BaseModel):
     sent_at: datetime | None
     received_at: datetime | None
     lines: list[TransferLineRead]
+
+
+class PhysicalCountCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    branch_id: uuid.UUID
+
+
+class PhysicalCountLineUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    variant_id: int
+    observed_quantity: int = Field(ge=0)
+
+
+class PhysicalCountLinesUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    lines: list[PhysicalCountLineUpdate] = Field(min_length=1)
+
+
+class PhysicalCountFinalize(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    note: str | None = Field(default=None, max_length=255)
+
+
+class PhysicalCountLineRead(BaseModel):
+    id: uuid.UUID
+    variant_id: int
+    snapshot_quantity: int
+    observed_quantity: int | None
+
+
+class PhysicalCountRead(BaseModel):
+    id: uuid.UUID
+    folio: str
+    branch_id: uuid.UUID
+    status: PhysicalCountStatus
+    created_by: uuid.UUID | None
+    finalized_by: uuid.UUID | None
+    created_at: datetime
+    finalized_at: datetime | None
+    lines: list[PhysicalCountLineRead]

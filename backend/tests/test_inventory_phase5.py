@@ -17,7 +17,13 @@ from app.api.deps import get_current_claims
 from app.core.db import Base, get_db
 from app.core.security import TokenClaims
 from app.main import app
-from app.models import StockTransfer, StockTransferLine, StockTransferStatus
+from app.models import (
+    PhysicalCount,
+    PhysicalCountStatus,
+    StockTransfer,
+    StockTransferLine,
+    StockTransferStatus,
+)
 from app.models.catalog import Category, Product, ProductGroup, ProductStatus, ProductVariant
 from app.models.identity import Branch, Role, UserBranchAssignment, UserProfile
 from app.models.inventory import StockBalance, StockEntry, StockMovementType
@@ -411,8 +417,26 @@ async def transfer_session_factory():
                     wholesale_price=1,
                     active=False,
                 ),
+                ProductVariant(
+                    id=904,
+                    product_id=901,
+                    sku="T5-004",
+                    cost_price=1,
+                    retail_price=2,
+                    wholesale_price=1,
+                ),
+                ProductVariant(
+                    id=905,
+                    product_id=901,
+                    sku="T5-005",
+                    cost_price=1,
+                    retail_price=2,
+                    wholesale_price=1,
+                ),
                 StockBalance(branch_id=ORIGIN_ID, variant_id=901, quantity=10),
                 StockBalance(branch_id=ORIGIN_ID, variant_id=902, quantity=2),
+                StockBalance(branch_id=ORIGIN_ID, variant_id=903, quantity=8),
+                StockBalance(branch_id=ORIGIN_ID, variant_id=904, quantity=0),
             ]
         )
         await session.commit()
@@ -694,5 +718,292 @@ def test_api_contract_documents_transfer_workflow():
         "transferencia_salida",
         "transferencia_entrada",
         "409",
+    ):
+        assert text in contract
+
+
+async def _create_count(client: AsyncClient, branch_id: uuid.UUID = ORIGIN_ID) -> dict:
+    response = await client.post(
+        "/api/v1/inventory/physical-counts", json={"branch_id": str(branch_id)}
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+async def _update_count_lines(
+    client: AsyncClient, count_id: str, observations: dict[int, int]
+):
+    return await client.patch(
+        f"/api/v1/inventory/physical-counts/{count_id}/lines",
+        json={
+            "lines": [
+                {"variant_id": variant_id, "observed_quantity": quantity}
+                for variant_id, quantity in observations.items()
+            ]
+        },
+    )
+
+
+async def test_start_count_snapshots_recorded_active_balances_in_variant_order(
+    transfer_client, transfer_session_factory
+):
+    created = await _create_count(transfer_client)
+
+    assert created["folio"].startswith("CF-T01-")
+    assert created["folio"].endswith("-000001")
+    assert created["status"] == "open"
+    assert created["branch_id"] == str(ORIGIN_ID)
+    assert created["created_by"] == str(ADMIN_ID)
+    assert [line["variant_id"] for line in created["lines"]] == [901, 902, 904]
+    assert [line["snapshot_quantity"] for line in created["lines"]] == [10, 2, 0]
+    assert all(line["observed_quantity"] is None for line in created["lines"])
+
+    async with transfer_session_factory() as session:
+        session.add(
+            StockEntry(
+                variant_id=901,
+                branch_id=ORIGIN_ID,
+                quantity=3,
+                movement_type=StockMovementType.AJUSTE,
+                created_by=ADMIN_ID,
+            )
+        )
+        balance = await session.get(StockBalance, (ORIGIN_ID, 901))
+        balance.quantity += 3
+        await session.commit()
+
+    detail = await transfer_client.get(
+        f"/api/v1/inventory/physical-counts/{created['id']}"
+    )
+    assert detail.status_code == 200
+    assert detail.json()["lines"][0]["snapshot_quantity"] == 10
+
+
+async def test_count_list_detail_and_authorization(transfer_client):
+    origin_count = await _create_count(transfer_client)
+    destination_count = await _create_count(transfer_client, DESTINATION_ID)
+
+    listed = await transfer_client.get("/api/v1/inventory/physical-counts")
+    assert listed.status_code == 200
+    assert {item["id"] for item in listed.json()} == {
+        origin_count["id"],
+        destination_count["id"],
+    }
+    detail = await transfer_client.get(
+        f"/api/v1/inventory/physical-counts/{origin_count['id']}"
+    )
+    assert detail.status_code == 200 and detail.json() == origin_count
+
+    def as_seller():
+        return TokenClaims(user_id=str(SELLER_ID), email="transfer-seller@test", role="vendedor")
+
+    app.dependency_overrides[get_current_claims] = as_seller
+    assert (await transfer_client.get("/api/v1/inventory/physical-counts")).status_code == 403
+    assert (
+        await transfer_client.post(
+            "/api/v1/inventory/physical-counts", json={"branch_id": str(ORIGIN_ID)}
+        )
+    ).status_code == 403
+
+    def as_manager():
+        return TokenClaims(
+            user_id=str(MANAGER_ID), email="transfer-manager@test", role="encargado"
+        )
+
+    app.dependency_overrides[get_current_claims] = as_manager
+    visible = await transfer_client.get("/api/v1/inventory/physical-counts")
+    assert [item["id"] for item in visible.json()] == [origin_count["id"]]
+    assert (
+        await transfer_client.get(
+            f"/api/v1/inventory/physical-counts/{destination_count['id']}"
+        )
+    ).status_code == 404
+    assert (
+        await transfer_client.patch(
+            f"/api/v1/inventory/physical-counts/{destination_count['id']}/lines",
+            json={"lines": [{"variant_id": 901, "observed_quantity": 0}]},
+        )
+    ).status_code == 404
+    assert (
+        await transfer_client.post(
+            f"/api/v1/inventory/physical-counts/{destination_count['id']}/finalize",
+            json={},
+            headers={"Idempotency-Key": "hidden-count"},
+        )
+    ).status_code == 404
+
+
+async def test_count_observations_are_partial_atomic_and_open_only(
+    transfer_client, transfer_session_factory
+):
+    created = await _create_count(transfer_client)
+    first = await _update_count_lines(transfer_client, created["id"], {901: 9})
+    assert first.status_code == 200
+    by_variant = {line["variant_id"]: line for line in first.json()["lines"]}
+    assert by_variant[901]["observed_quantity"] == 9
+    assert by_variant[901]["snapshot_quantity"] == 10
+    assert by_variant[902]["observed_quantity"] is None
+
+    duplicate = await transfer_client.patch(
+        f"/api/v1/inventory/physical-counts/{created['id']}/lines",
+        json={
+            "lines": [
+                {"variant_id": 901, "observed_quantity": 8},
+                {"variant_id": 901, "observed_quantity": 7},
+            ]
+        },
+    )
+    unknown = await _update_count_lines(transfer_client, created["id"], {99999: 1})
+    negative = await transfer_client.patch(
+        f"/api/v1/inventory/physical-counts/{created['id']}/lines",
+        json={"lines": [{"variant_id": 902, "observed_quantity": -1}]},
+    )
+    assert duplicate.status_code == 409
+    assert unknown.status_code == 409
+    assert negative.status_code == 422
+
+    detail = (
+        await transfer_client.get(f"/api/v1/inventory/physical-counts/{created['id']}")
+    ).json()
+    persisted = {line["variant_id"]: line for line in detail["lines"]}
+    assert persisted[901]["observed_quantity"] == 9
+    assert persisted[902]["observed_quantity"] is None
+
+    async with transfer_session_factory() as session:
+        count = await session.get(PhysicalCount, uuid.UUID(created["id"]))
+        count.status = PhysicalCountStatus.FINALIZED
+        await session.commit()
+    assert (await _update_count_lines(transfer_client, created["id"], {901: 8})).status_code == 409
+
+
+async def test_finalize_requires_every_observation(transfer_client):
+    created = await _create_count(transfer_client)
+    await _update_count_lines(transfer_client, created["id"], {901: 10})
+    response = await transfer_client.post(
+        f"/api/v1/inventory/physical-counts/{created['id']}/finalize",
+        json={},
+        headers={"Idempotency-Key": "incomplete-count"},
+    )
+    assert response.status_code == 409
+
+
+async def test_finalize_reconciles_current_balance_and_is_idempotent(
+    transfer_client, transfer_session_factory
+):
+    created = await _create_count(transfer_client)
+    updated = await _update_count_lines(
+        transfer_client, created["id"], {901: 12, 902: 1, 904: 0}
+    )
+    assert updated.status_code == 200
+
+    async with transfer_session_factory() as session:
+        first = await session.get(StockBalance, (ORIGIN_ID, 901))
+        second = await session.get(StockBalance, (ORIGIN_ID, 902))
+        first.quantity = 11
+        second.quantity = 4
+        await session.commit()
+
+    url = f"/api/v1/inventory/physical-counts/{created['id']}/finalize"
+    headers = {"Idempotency-Key": "finalize-count"}
+    finalized = await transfer_client.post(url, json={}, headers=headers)
+    assert finalized.status_code == 200
+    assert finalized.json()["status"] == "finalized"
+    assert finalized.json()["finalized_by"] == str(ADMIN_ID)
+    replay = await transfer_client.post(url, json={}, headers=headers)
+    assert replay.status_code == 200 and replay.json() == finalized.json()
+    assert (
+        await transfer_client.post(url, json={"note": "changed"}, headers=headers)
+    ).status_code == 409
+    assert (
+        await transfer_client.post(
+            url, json={}, headers={"Idempotency-Key": "new-finalize-key"}
+        )
+    ).status_code == 409
+    assert (await _update_count_lines(transfer_client, created["id"], {901: 11})).status_code == 409
+
+    async with transfer_session_factory() as session:
+        balances = {
+            variant_id: (await session.get(StockBalance, (ORIGIN_ID, variant_id))).quantity
+            for variant_id in (901, 902, 904)
+        }
+        assert balances == {901: 12, 902: 1, 904: 0}
+        entries = list(
+            await session.scalars(
+                select(StockEntry)
+                .where(
+                    StockEntry.reference == created["folio"],
+                    StockEntry.movement_type == StockMovementType.CONTEO,
+                )
+                .order_by(StockEntry.variant_id)
+            )
+        )
+        assert [
+            (entry.variant_id, entry.quantity, entry.created_by) for entry in entries
+        ] == [(901, 1, ADMIN_ID), (902, -3, ADMIN_ID)]
+
+
+async def test_finalize_reconciles_when_current_balance_is_below_snapshot(
+    transfer_client, transfer_session_factory
+):
+    created = await _create_count(transfer_client)
+    await _update_count_lines(
+        transfer_client, created["id"], {901: 0, 902: 4, 904: 0}
+    )
+    async with transfer_session_factory() as session:
+        first = await session.get(StockBalance, (ORIGIN_ID, 901))
+        first.quantity = 5
+        await session.commit()
+
+    response = await transfer_client.post(
+        f"/api/v1/inventory/physical-counts/{created['id']}/finalize",
+        json={},
+        headers={"Idempotency-Key": "negative-count"},
+    )
+    assert response.status_code == 200
+
+    async with transfer_session_factory() as session:
+        count = await session.get(PhysicalCount, uuid.UUID(created["id"]))
+        balances = {
+            variant_id: (await session.get(StockBalance, (ORIGIN_ID, variant_id))).quantity
+            for variant_id in (901, 902, 904)
+        }
+        entries = list(
+            await session.scalars(
+                select(StockEntry)
+                .where(StockEntry.reference == created["folio"])
+                .order_by(StockEntry.variant_id)
+            )
+        )
+        assert count.status is PhysicalCountStatus.FINALIZED
+        assert balances == {901: 0, 902: 4, 904: 0}
+        assert [(entry.variant_id, entry.quantity) for entry in entries] == [
+            (901, -5),
+            (902, 2),
+        ]
+
+
+async def test_count_update_rejects_empty_lines(transfer_client):
+    created = await _create_count(transfer_client)
+    response = await transfer_client.patch(
+        f"/api/v1/inventory/physical-counts/{created['id']}/lines", json={"lines": []}
+    )
+    assert response.status_code == 422
+
+
+def test_api_contract_documents_physical_count_workflow():
+    contract = Path(__file__).resolve().parents[2].joinpath("docs", "API_CONTRACT.md").read_text()
+    for text in (
+        "POST /inventory/physical-counts",
+        "GET /inventory/physical-counts",
+        "GET /inventory/physical-counts/{count_id}",
+        "PATCH /inventory/physical-counts/{count_id}/lines",
+        "POST /inventory/physical-counts/{count_id}/finalize",
+        "Idempotency-Key",
+        "conteo",
+        "snapshot_quantity",
+        "observed_quantity",
+        "201",
+        "409",
+        "422",
     ):
         assert text in contract

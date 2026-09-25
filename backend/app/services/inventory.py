@@ -17,6 +17,9 @@ from app.core.config import get_settings
 from app.models.catalog import ProductVariant
 from app.models.identity import Branch, UserProfile
 from app.models.inventory import (
+    PhysicalCount,
+    PhysicalCountLine,
+    PhysicalCountStatus,
     StockBalance,
     StockEntry,
     StockMovementType,
@@ -25,7 +28,16 @@ from app.models.inventory import (
     StockTransferStatus,
 )
 from app.models.sales import FolioCounter, IdempotencyRecord
-from app.schemas.inventory import TransferCreate, TransferRead, TransferReceive, TransferSend
+from app.schemas.inventory import (
+    PhysicalCountCreate,
+    PhysicalCountFinalize,
+    PhysicalCountLinesUpdate,
+    PhysicalCountRead,
+    TransferCreate,
+    TransferRead,
+    TransferReceive,
+    TransferSend,
+)
 
 
 def request_hash(payload: BaseModel) -> str:
@@ -374,6 +386,203 @@ async def receive_transfer(
     transfer.received_at = datetime.now(UTC)
     await db.flush()
     result = _transfer_read(transfer)
+    idem.response = result.model_dump(mode="json")
+    await db.flush()
+    return result
+
+
+def _physical_count_read(count: PhysicalCount) -> PhysicalCountRead:
+    return PhysicalCountRead(
+        id=count.id,
+        folio=count.folio,
+        branch_id=count.branch_id,
+        status=count.status,
+        created_by=count.created_by,
+        finalized_by=count.finalized_by,
+        created_at=count.created_at,
+        finalized_at=count.finalized_at,
+        lines=[
+            {
+                "id": line.id,
+                "variant_id": line.variant_id,
+                "snapshot_quantity": line.snapshot_quantity,
+                "observed_quantity": line.observed_quantity,
+            }
+            for line in sorted(count.lines, key=lambda item: item.variant_id)
+        ],
+    )
+
+
+async def _load_physical_count(
+    db: AsyncSession,
+    count_id: uuid.UUID,
+    visible_branch_ids: list[uuid.UUID],
+    *,
+    for_update: bool = False,
+) -> PhysicalCount:
+    statement = (
+        select(PhysicalCount)
+        .options(selectinload(PhysicalCount.lines))
+        .where(
+            PhysicalCount.id == count_id,
+            PhysicalCount.branch_id.in_(visible_branch_ids),
+        )
+    )
+    if for_update:
+        statement = statement.with_for_update()
+    count = await db.scalar(statement)
+    if count is None:
+        raise HTTPException(status_code=404, detail="Conteo fisico no encontrado")
+    return count
+
+
+async def create_physical_count(
+    db: AsyncSession,
+    payload: PhysicalCountCreate,
+    profile: UserProfile,
+    branch: Branch,
+) -> PhysicalCountRead:
+    snapshot_rows = (
+        await db.execute(
+            select(StockBalance.variant_id, StockBalance.quantity)
+            .join(ProductVariant, ProductVariant.id == StockBalance.variant_id)
+            .where(
+                StockBalance.branch_id == payload.branch_id,
+                ProductVariant.active.is_(True),
+            )
+            .order_by(StockBalance.variant_id)
+        )
+    ).all()
+    count = PhysicalCount(
+        folio=await next_document_folio(db, branch, "CF"),
+        branch_id=payload.branch_id,
+        created_by=profile.id,
+        lines=[
+            PhysicalCountLine(variant_id=variant_id, snapshot_quantity=quantity)
+            for variant_id, quantity in snapshot_rows
+        ],
+    )
+    db.add(count)
+    await db.flush()
+    return _physical_count_read(count)
+
+
+async def list_physical_counts(
+    db: AsyncSession, visible_branch_ids: list[uuid.UUID], limit: int, offset: int
+) -> list[PhysicalCountRead]:
+    if not visible_branch_ids:
+        return []
+    counts = list(
+        await db.scalars(
+            select(PhysicalCount)
+            .options(selectinload(PhysicalCount.lines))
+            .where(PhysicalCount.branch_id.in_(visible_branch_ids))
+            .order_by(PhysicalCount.created_at.desc(), PhysicalCount.id.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+    )
+    return [_physical_count_read(count) for count in counts]
+
+
+async def physical_count_detail(
+    db: AsyncSession, count_id: uuid.UUID, visible_branch_ids: list[uuid.UUID]
+) -> PhysicalCountRead:
+    return _physical_count_read(
+        await _load_physical_count(db, count_id, visible_branch_ids)
+    )
+
+
+async def update_physical_count_lines(
+    db: AsyncSession,
+    count_id: uuid.UUID,
+    payload: PhysicalCountLinesUpdate,
+    visible_branch_ids: list[uuid.UUID],
+) -> PhysicalCountRead:
+    count = await _load_physical_count(db, count_id, visible_branch_ids, for_update=True)
+    if count.status is not PhysicalCountStatus.OPEN:
+        raise HTTPException(status_code=409, detail="Solo se puede editar un conteo open")
+    observed_by_variant = {
+        line.variant_id: line.observed_quantity for line in payload.lines
+    }
+    if len(observed_by_variant) != len(payload.lines):
+        raise HTTPException(status_code=409, detail="Las observaciones repiten variantes")
+    lines_by_variant = {line.variant_id: line for line in count.lines}
+    if not set(observed_by_variant).issubset(lines_by_variant):
+        raise HTTPException(status_code=409, detail="La variante no pertenece al conteo")
+    for variant_id, observed_quantity in observed_by_variant.items():
+        lines_by_variant[variant_id].observed_quantity = observed_quantity
+    await db.flush()
+    return _physical_count_read(count)
+
+
+async def finalize_physical_count(
+    db: AsyncSession,
+    count_id: uuid.UUID,
+    payload: PhysicalCountFinalize,
+    profile: UserProfile,
+    visible_branch_ids: list[uuid.UUID],
+    idempotency_key: str,
+) -> PhysicalCountRead:
+    count = await _load_physical_count(db, count_id, visible_branch_ids, for_update=True)
+    idem = await idempotency_record(
+        db,
+        profile,
+        idempotency_key,
+        request_hash(payload),
+        f"inventory.physical-counts.{count_id}.finalize",
+    )
+    if idem.response is not None:
+        return PhysicalCountRead.model_validate(idem.response)
+    if count.status is not PhysicalCountStatus.OPEN:
+        raise HTTPException(status_code=409, detail="El conteo ya fue finalizado")
+    if any(line.observed_quantity is None for line in count.lines):
+        raise HTTPException(status_code=409, detail="Todas las lineas requieren observacion")
+
+    keys = [(count.branch_id, line.variant_id) for line in count.lines]
+    balances = {
+        (balance.branch_id, balance.variant_id): balance
+        for balance in await db.scalars(stock_balances_lock_statement(keys))
+    }
+    if len(balances) != len(keys):
+        raise HTTPException(status_code=409, detail="El inventario del conteo ya no existe")
+    differences = {
+        line.variant_id: line.observed_quantity
+        - balances[(count.branch_id, line.variant_id)].quantity
+        for line in count.lines
+    }
+    if any(
+        balances[(count.branch_id, line.variant_id)].quantity
+        + differences[line.variant_id]
+        < 0
+        for line in count.lines
+    ):
+        raise HTTPException(
+            status_code=409, detail="El conteo produciria inventario negativo"
+        )
+
+    note = payload.note.strip() if payload.note else None
+    for line in count.lines:
+        difference = differences[line.variant_id]
+        if difference == 0:
+            continue
+        balances[(count.branch_id, line.variant_id)].quantity += difference
+        db.add(
+            StockEntry(
+                variant_id=line.variant_id,
+                branch_id=count.branch_id,
+                quantity=difference,
+                movement_type=StockMovementType.CONTEO,
+                reference=count.folio,
+                note=note,
+                created_by=profile.id,
+            )
+        )
+    count.status = PhysicalCountStatus.FINALIZED
+    count.finalized_by = profile.id
+    count.finalized_at = datetime.now(UTC)
+    await db.flush()
+    result = _physical_count_read(count)
     idem.response = result.model_dump(mode="json")
     await db.flush()
     return result

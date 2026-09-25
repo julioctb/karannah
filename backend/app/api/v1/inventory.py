@@ -22,17 +22,28 @@ from app.schemas.inventory import (
     InventoryAdjustmentCreate,
     InventoryAdjustmentRead,
     InventoryMovementRead,
+    PhysicalCountCreate,
+    PhysicalCountFinalize,
+    PhysicalCountLinesUpdate,
+    PhysicalCountRead,
     StockLevel,
     TransferCreate,
     TransferRead,
     TransferReceive,
     TransferSend,
 )
+from app.services.inventory import create_physical_count as create_physical_count_service
 from app.services.inventory import create_transfer as create_transfer_service
+from app.services.inventory import finalize_physical_count as finalize_physical_count_service
+from app.services.inventory import list_physical_counts as list_physical_counts_service
 from app.services.inventory import list_transfers as list_transfers_service
+from app.services.inventory import physical_count_detail as physical_count_detail_service
 from app.services.inventory import receive_transfer as receive_transfer_service
 from app.services.inventory import send_transfer as send_transfer_service
 from app.services.inventory import transfer_detail as transfer_detail_service
+from app.services.inventory import (
+    update_physical_count_lines as update_physical_count_lines_service,
+)
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 
@@ -236,6 +247,75 @@ async def receive_transfer(
     branch_ids = await visible_branch_ids(db, profile)
     result = await receive_transfer_service(
         db, transfer_id, payload, profile, branch_ids, idempotency_key
+    )
+    await db.commit()
+    return result
+
+
+@router.post(
+    "/physical-counts",
+    response_model=PhysicalCountRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_physical_count(
+    payload: PhysicalCountCreate, db: Db, profile: Profile
+) -> PhysicalCountRead:
+    ensure_role(profile, Role.ADMIN, Role.ENCARGADO)
+    branch = await require_visible_branch(db, profile, payload.branch_id)
+    result = await create_physical_count_service(db, payload, profile, branch)
+    await db.commit()
+    return result
+
+
+@router.get("/physical-counts", response_model=list[PhysicalCountRead])
+async def list_physical_counts(
+    db: Db, profile: Profile, page: PaginationParams
+) -> list[PhysicalCountRead]:
+    ensure_role(profile, Role.ADMIN, Role.ENCARGADO)
+    limit, offset = page
+    branch_ids = await visible_branch_ids(db, profile)
+    return await list_physical_counts_service(db, branch_ids, limit, offset)
+
+
+@router.get("/physical-counts/{count_id}", response_model=PhysicalCountRead)
+async def physical_count_detail(
+    count_id: uuid.UUID, db: Db, profile: Profile
+) -> PhysicalCountRead:
+    ensure_role(profile, Role.ADMIN, Role.ENCARGADO)
+    branch_ids = await visible_branch_ids(db, profile)
+    return await physical_count_detail_service(db, count_id, branch_ids)
+
+
+@router.patch("/physical-counts/{count_id}/lines", response_model=PhysicalCountRead)
+async def update_physical_count_lines(
+    count_id: uuid.UUID,
+    payload: PhysicalCountLinesUpdate,
+    db: Db,
+    profile: Profile,
+) -> PhysicalCountRead:
+    ensure_role(profile, Role.ADMIN, Role.ENCARGADO)
+    branch_ids = await visible_branch_ids(db, profile)
+    result = await update_physical_count_lines_service(
+        db, count_id, payload, branch_ids
+    )
+    await db.commit()
+    return result
+
+
+@router.post("/physical-counts/{count_id}/finalize", response_model=PhysicalCountRead)
+async def finalize_physical_count(
+    count_id: uuid.UUID,
+    payload: PhysicalCountFinalize,
+    db: Db,
+    profile: Profile,
+    idempotency_key: Annotated[
+        str, Header(alias="Idempotency-Key", min_length=1, max_length=120)
+    ],
+) -> PhysicalCountRead:
+    ensure_role(profile, Role.ADMIN, Role.ENCARGADO)
+    branch_ids = await visible_branch_ids(db, profile)
+    result = await finalize_physical_count_service(
+        db, count_id, payload, profile, branch_ids, idempotency_key
     )
     await db.commit()
     return result
