@@ -89,24 +89,38 @@ No existe registro publico.
 - Las existencias iniciales no forman parte de `POST /catalog/products`: React
   crea ajustes auditados por variante en la sucursal elegida explicitamente.
 
-### Transferencias (vocabulario de Fase 5)
+### Transferencias
 
-Esta seccion fija el vocabulario persistido y del contrato. Los endpoints se
-habilitaran en las siguientes unidades de Fase 5; FastAPI seguira siendo la
-unica ruta operacional de datos.
-
-- Los folios de transferencia usan `TR-SUC-YEAR-NUMBER`; `TR` identifica el
-  recurso de transferencia entre sucursales.
-- Una transferencia recorre exclusivamente `draft`, `sent` y `received`.
-  Cada linea conserva `shipped_quantity`; al recibir conserva
-  `received_quantity` y `shortage_quantity`.
-- `received_quantity` nunca puede superar `shipped_quantity`, y
-  `shortage_quantity` representa exactamente la diferencia. Antes de recibir,
-  ambas cantidades de recepcion permanecen ausentes.
-- Enviar y recibir un `TR` producira movimientos inmutables
-  `transferencia_salida` y `transferencia_entrada`, respectivamente. Los
-  documentos no reemplazan a `StockEntry`, y `StockBalance` sigue siendo solo
-  la proyeccion bloqueable.
+- `POST /inventory/transfers` crea un borrador y responde `201`. Requiere
+  `origin_branch_id`, `destination_branch_id` y `lines` unicas con
+  `variant_id` y `shipped_quantity` positivo. Las sucursales deben ser
+  distintas y las variantes deben existir y estar activas.
+- `GET /inventory/transfers` lista solamente documentos cuyas sucursales de
+  origen y destino son visibles. `GET /inventory/transfers/{transfer_id}`
+  devuelve el detalle bajo la misma regla; un documento fuera del alcance
+  responde `404`.
+- `POST /inventory/transfers/{transfer_id}/send` recibe opcionalmente `note`,
+  requiere `Idempotency-Key`, cambia `draft` a `sent`, debita el origen y crea
+  movimientos inmutables `transferencia_salida` referenciados por el folio.
+- `POST /inventory/transfers/{transfer_id}/receive` requiere
+  `Idempotency-Key` y una linea por cada variante enviada, con `variant_id` y
+  `received_quantity`. Cambia `sent` a `received`, acredita al destino solo la
+  cantidad efectivamente recibida y crea movimientos `transferencia_entrada`
+  solo cuando esa cantidad es positiva.
+- Ambas mutaciones idempotentes devuelven la respuesta almacenada al repetir
+  la misma clave y cuerpo, sin duplicar saldos ni ledger. Reutilizar la clave
+  dentro del mismo endpoint con otro cuerpo responde `409`.
+- Crear, listar, consultar, enviar y recibir requiere rol `admin` o `encargado`
+  y visibilidad sobre ambas sucursales.
+- Los folios usan `TR-SUC-YEAR-NUMBER`. Una transferencia recorre
+  exclusivamente `draft`, `sent` y `received`. Cada linea conserva
+  `shipped_quantity`; al recibir persiste `received_quantity` y la diferencia
+  exacta en `shortage_quantity`.
+- Omitir o agregar lineas, recibir por encima de lo enviado, mutar desde un
+  estado incorrecto, enviar sin stock suficiente o provocar stock negativo
+  responde `409`. Errores de validacion del cuerpo responden `422`.
+- Los documentos no reemplazan a `StockEntry`; `StockBalance` sigue siendo solo
+  la proyeccion bloqueable y ambos se actualizan en la misma transaccion.
 
 ### Conteos fisicos (vocabulario de Fase 5)
 

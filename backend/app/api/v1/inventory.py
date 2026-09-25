@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,7 +23,16 @@ from app.schemas.inventory import (
     InventoryAdjustmentRead,
     InventoryMovementRead,
     StockLevel,
+    TransferCreate,
+    TransferRead,
+    TransferReceive,
+    TransferSend,
 )
+from app.services.inventory import create_transfer as create_transfer_service
+from app.services.inventory import list_transfers as list_transfers_service
+from app.services.inventory import receive_transfer as receive_transfer_service
+from app.services.inventory import send_transfer as send_transfer_service
+from app.services.inventory import transfer_detail as transfer_detail_service
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 
@@ -163,3 +172,70 @@ async def create_adjustment(
         created_at=movement.created_at,
         resulting_quantity=resulting,
     )
+
+
+@router.post(
+    "/transfers",
+    response_model=TransferRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_transfer(payload: TransferCreate, db: Db, profile: Profile) -> TransferRead:
+    ensure_role(profile, Role.ADMIN, Role.ENCARGADO)
+    origin = await require_visible_branch(db, profile, payload.origin_branch_id)
+    await require_visible_branch(db, profile, payload.destination_branch_id)
+    result = await create_transfer_service(db, payload, profile, origin)
+    await db.commit()
+    return result
+
+
+@router.get("/transfers", response_model=list[TransferRead])
+async def list_transfers(
+    db: Db, profile: Profile, page: PaginationParams
+) -> list[TransferRead]:
+    ensure_role(profile, Role.ADMIN, Role.ENCARGADO)
+    limit, offset = page
+    branch_ids = await visible_branch_ids(db, profile)
+    return await list_transfers_service(db, branch_ids, limit, offset)
+
+
+@router.get("/transfers/{transfer_id}", response_model=TransferRead)
+async def transfer_detail(
+    transfer_id: uuid.UUID, db: Db, profile: Profile
+) -> TransferRead:
+    ensure_role(profile, Role.ADMIN, Role.ENCARGADO)
+    branch_ids = await visible_branch_ids(db, profile)
+    return await transfer_detail_service(db, transfer_id, branch_ids)
+
+
+@router.post("/transfers/{transfer_id}/send", response_model=TransferRead)
+async def send_transfer(
+    transfer_id: uuid.UUID,
+    payload: TransferSend,
+    db: Db,
+    profile: Profile,
+    idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=120)],
+) -> TransferRead:
+    ensure_role(profile, Role.ADMIN, Role.ENCARGADO)
+    branch_ids = await visible_branch_ids(db, profile)
+    result = await send_transfer_service(
+        db, transfer_id, payload, profile, branch_ids, idempotency_key
+    )
+    await db.commit()
+    return result
+
+
+@router.post("/transfers/{transfer_id}/receive", response_model=TransferRead)
+async def receive_transfer(
+    transfer_id: uuid.UUID,
+    payload: TransferReceive,
+    db: Db,
+    profile: Profile,
+    idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=120)],
+) -> TransferRead:
+    ensure_role(profile, Role.ADMIN, Role.ENCARGADO)
+    branch_ids = await visible_branch_ids(db, profile)
+    result = await receive_transfer_service(
+        db, transfer_id, payload, profile, branch_ids, idempotency_key
+    )
+    await db.commit()
+    return result

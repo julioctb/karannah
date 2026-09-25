@@ -2,14 +2,25 @@ from __future__ import annotations
 
 import importlib.util
 import sqlite3
+import uuid
 from pathlib import Path
 
 import pytest
-from sqlalchemy import CheckConstraint, MetaData, Table, UniqueConstraint
+import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import CheckConstraint, MetaData, Table, UniqueConstraint, select
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.pool import StaticPool
 
 from app import models
+from app.api.deps import get_current_claims
+from app.core.db import Base, get_db
+from app.core.security import TokenClaims
+from app.main import app
 from app.models import StockTransfer, StockTransferLine, StockTransferStatus
-from app.models.inventory import StockEntry
+from app.models.catalog import Category, Product, ProductGroup, ProductStatus, ProductVariant
+from app.models.identity import Branch, Role, UserBranchAssignment, UserProfile
+from app.models.inventory import StockBalance, StockEntry, StockMovementType
 
 
 def _transfer_quantity_database() -> sqlite3.Connection:
@@ -331,3 +342,357 @@ def test_api_contract_names_count_foundation_vocabulary():
     assert "expected_quantity" not in contract
     assert "counted_quantity" not in contract
     assert "difference_quantity" not in contract
+
+
+ADMIN_ID = uuid.uuid4()
+MANAGER_ID = uuid.uuid4()
+SELLER_ID = uuid.uuid4()
+ORIGIN_ID = uuid.uuid4()
+DESTINATION_ID = uuid.uuid4()
+
+
+@pytest_asyncio.fixture()
+async def transfer_session_factory():
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:", poolclass=StaticPool)
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with factory() as session:
+        session.add_all(
+            [
+                Branch(id=ORIGIN_ID, code="T01", name="Origin"),
+                Branch(id=DESTINATION_ID, code="T02", name="Destination"),
+                UserProfile(id=ADMIN_ID, email="transfer-admin@test", role=Role.ADMIN),
+                UserProfile(id=MANAGER_ID, email="transfer-manager@test", role=Role.ENCARGADO),
+                UserProfile(id=SELLER_ID, email="transfer-seller@test", role=Role.VENDEDOR),
+            ]
+        )
+        await session.flush()
+        session.add_all(
+            [
+                UserBranchAssignment(user_id=MANAGER_ID, branch_id=ORIGIN_ID),
+                Category(id=901, code="T5", name="Phase 5", group=ProductGroup.NO_JOYERIA),
+            ]
+        )
+        await session.flush()
+        session.add(
+            Product(
+                id=901,
+                name="Transfer product",
+                category_id=901,
+                status=ProductStatus.DISPONIBLE,
+            )
+        )
+        await session.flush()
+        session.add_all(
+            [
+                ProductVariant(
+                    id=901,
+                    product_id=901,
+                    sku="T5-001",
+                    cost_price=1,
+                    retail_price=2,
+                    wholesale_price=1,
+                ),
+                ProductVariant(
+                    id=902,
+                    product_id=901,
+                    sku="T5-002",
+                    cost_price=1,
+                    retail_price=2,
+                    wholesale_price=1,
+                ),
+                ProductVariant(
+                    id=903,
+                    product_id=901,
+                    sku="T5-003",
+                    cost_price=1,
+                    retail_price=2,
+                    wholesale_price=1,
+                    active=False,
+                ),
+                StockBalance(branch_id=ORIGIN_ID, variant_id=901, quantity=10),
+                StockBalance(branch_id=ORIGIN_ID, variant_id=902, quantity=2),
+            ]
+        )
+        await session.commit()
+    yield factory
+    await engine.dispose()
+
+
+@pytest_asyncio.fixture()
+async def transfer_client(transfer_session_factory):
+    async def override_db():
+        async with transfer_session_factory() as session:
+            yield session
+
+    def as_admin():
+        return TokenClaims(user_id=str(ADMIN_ID), email="transfer-admin@test", role="admin")
+
+    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_current_claims] = as_admin
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        yield client
+    app.dependency_overrides.clear()
+
+
+def _create_payload(lines=None):
+    return {
+        "origin_branch_id": str(ORIGIN_ID),
+        "destination_branch_id": str(DESTINATION_ID),
+        "lines": lines or [{"variant_id": 901, "shipped_quantity": 5}],
+    }
+
+
+async def _create_transfer(client: AsyncClient, lines=None) -> dict:
+    response = await client.post("/api/v1/inventory/transfers", json=_create_payload(lines))
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+async def test_create_list_and_detail_transfer(transfer_client, transfer_session_factory):
+    created = await _create_transfer(
+        transfer_client,
+        [
+            {"variant_id": 902, "shipped_quantity": 1},
+            {"variant_id": 901, "shipped_quantity": 5},
+        ],
+    )
+    assert created["folio"].startswith("TR-T01-")
+    assert created["folio"].endswith("-000001")
+    assert created["status"] == "draft"
+    assert created["created_by"] == str(ADMIN_ID)
+    assert [line["variant_id"] for line in created["lines"]] == [901, 902]
+
+    listed = (await transfer_client.get("/api/v1/inventory/transfers")).json()
+    assert [item["id"] for item in listed] == [created["id"]]
+    detail = await transfer_client.get(f"/api/v1/inventory/transfers/{created['id']}")
+    assert detail.status_code == 200
+    assert detail.json() == created
+
+    async with transfer_session_factory() as session:
+        persisted = await session.get(StockTransfer, uuid.UUID(created["id"]))
+        assert persisted is not None and persisted.created_by == ADMIN_ID
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        _create_payload([{"variant_id": 901, "shipped_quantity": 0}]),
+        {
+            "origin_branch_id": str(ORIGIN_ID),
+            "destination_branch_id": str(ORIGIN_ID),
+            "lines": [{"variant_id": 901, "shipped_quantity": 1}],
+        },
+        _create_payload(
+            [
+                {"variant_id": 901, "shipped_quantity": 1},
+                {"variant_id": 901, "shipped_quantity": 2},
+            ]
+        ),
+        _create_payload([{"variant_id": 903, "shipped_quantity": 1}]),
+        _create_payload([{"variant_id": 99999, "shipped_quantity": 1}]),
+    ],
+)
+async def test_create_transfer_rejects_invalid_identity_or_variants(transfer_client, payload):
+    response = await transfer_client.post("/api/v1/inventory/transfers", json=payload)
+    assert response.status_code in {404, 409, 422}
+
+
+async def test_transfer_authorization_requires_role_and_both_branches(transfer_client):
+    created = await _create_transfer(transfer_client)
+
+    def as_seller():
+        return TokenClaims(user_id=str(SELLER_ID), email="transfer-seller@test", role="vendedor")
+
+    app.dependency_overrides[get_current_claims] = as_seller
+    assert (await transfer_client.get("/api/v1/inventory/transfers")).status_code == 403
+    assert (
+        await transfer_client.post("/api/v1/inventory/transfers", json=_create_payload())
+    ).status_code == 403
+
+    def as_manager():
+        return TokenClaims(user_id=str(MANAGER_ID), email="transfer-manager@test", role="encargado")
+
+    app.dependency_overrides[get_current_claims] = as_manager
+    assert (await transfer_client.get("/api/v1/inventory/transfers")).json() == []
+    assert (
+        await transfer_client.get(f"/api/v1/inventory/transfers/{created['id']}")
+    ).status_code == 404
+    assert (
+        await transfer_client.post("/api/v1/inventory/transfers", json=_create_payload())
+    ).status_code == 404
+    assert (
+        await transfer_client.post(
+            f"/api/v1/inventory/transfers/{created['id']}/send",
+            json={},
+            headers={"Idempotency-Key": "manager-send"},
+        )
+    ).status_code == 404
+
+
+async def test_send_transfer_is_atomic_audited_and_idempotent(
+    transfer_client, transfer_session_factory
+):
+    created = await _create_transfer(transfer_client)
+    url = f"/api/v1/inventory/transfers/{created['id']}/send"
+    headers = {"Idempotency-Key": "send-1"}
+    sent = await transfer_client.post(url, json={"note": "Dispatch"}, headers=headers)
+    assert sent.status_code == 200
+    assert sent.json()["status"] == "sent"
+    replay = await transfer_client.post(url, json={"note": "Dispatch"}, headers=headers)
+    assert replay.status_code == 200 and replay.json() == sent.json()
+    conflict = await transfer_client.post(url, json={"note": "Changed"}, headers=headers)
+    assert conflict.status_code == 409
+    assert (
+        await transfer_client.post(
+            url,
+            json={"note": "Dispatch"},
+            headers={"Idempotency-Key": "send-after-sent"},
+        )
+    ).status_code == 409
+
+    async with transfer_session_factory() as session:
+        balance = await session.get(StockBalance, (ORIGIN_ID, 901))
+        assert balance.quantity == 5
+        entries = list(
+            await session.scalars(
+                select(StockEntry).where(
+                    StockEntry.reference == created["folio"],
+                    StockEntry.movement_type == StockMovementType.TRANSFERENCIA_SALIDA,
+                )
+            )
+        )
+        assert [(entry.branch_id, entry.variant_id, entry.quantity) for entry in entries] == [
+            (ORIGIN_ID, 901, -5)
+        ]
+
+
+async def test_send_with_insufficient_stock_changes_nothing(
+    transfer_client, transfer_session_factory
+):
+    created = await _create_transfer(
+        transfer_client, [{"variant_id": 901, "shipped_quantity": 11}]
+    )
+    response = await transfer_client.post(
+        f"/api/v1/inventory/transfers/{created['id']}/send",
+        json={},
+        headers={"Idempotency-Key": "send-insufficient"},
+    )
+    assert response.status_code == 409
+    async with transfer_session_factory() as session:
+        transfer = await session.get(StockTransfer, uuid.UUID(created["id"]))
+        balance = await session.get(StockBalance, (ORIGIN_ID, 901))
+        entries = list(await session.scalars(select(StockEntry).where(StockEntry.reference == created["folio"])))
+        assert transfer.status is StockTransferStatus.DRAFT
+        assert balance.quantity == 10
+        assert entries == []
+
+
+async def test_receive_transfer_records_actual_shortages_and_is_idempotent(
+    transfer_client, transfer_session_factory
+):
+    created = await _create_transfer(
+        transfer_client,
+        [
+            {"variant_id": 901, "shipped_quantity": 5},
+            {"variant_id": 902, "shipped_quantity": 2},
+        ],
+    )
+    await transfer_client.post(
+        f"/api/v1/inventory/transfers/{created['id']}/send",
+        json={},
+        headers={"Idempotency-Key": "send-receive"},
+    )
+    url = f"/api/v1/inventory/transfers/{created['id']}/receive"
+    body = {
+        "lines": [
+            {"variant_id": 902, "received_quantity": 0},
+            {"variant_id": 901, "received_quantity": 3},
+        ]
+    }
+    headers = {"Idempotency-Key": "receive-1"}
+    received = await transfer_client.post(url, json=body, headers=headers)
+    assert received.status_code == 200
+    assert received.json()["status"] == "received"
+    assert {
+        line["variant_id"]: (line["received_quantity"], line["shortage_quantity"])
+        for line in received.json()["lines"]
+    } == {901: (3, 2), 902: (0, 2)}
+    replay = await transfer_client.post(url, json=body, headers=headers)
+    assert replay.status_code == 200 and replay.json() == received.json()
+    changed = {"lines": [{"variant_id": 901, "received_quantity": 4}, {"variant_id": 902, "received_quantity": 0}]}
+    assert (await transfer_client.post(url, json=changed, headers=headers)).status_code == 409
+
+    async with transfer_session_factory() as session:
+        balance = await session.get(StockBalance, (DESTINATION_ID, 901))
+        zero_balance = await session.get(StockBalance, (DESTINATION_ID, 902))
+        assert balance.quantity == 3
+        assert zero_balance is None
+        entries = list(
+            await session.scalars(
+                select(StockEntry).where(
+                    StockEntry.reference == created["folio"],
+                    StockEntry.movement_type == StockMovementType.TRANSFERENCIA_ENTRADA,
+                )
+            )
+        )
+        assert [(entry.variant_id, entry.quantity) for entry in entries] == [(901, 3)]
+
+
+@pytest.mark.parametrize(
+    "lines",
+    [
+        [{"variant_id": 901, "received_quantity": 6}],
+        [{"variant_id": 99999, "received_quantity": 1}],
+        [],
+    ],
+)
+async def test_receive_rejects_line_mismatches_atomically(
+    transfer_client, transfer_session_factory, lines
+):
+    created = await _create_transfer(transfer_client)
+    await transfer_client.post(
+        f"/api/v1/inventory/transfers/{created['id']}/send",
+        json={},
+        headers={"Idempotency-Key": f"send-invalid-{len(lines)}"},
+    )
+    response = await transfer_client.post(
+        f"/api/v1/inventory/transfers/{created['id']}/receive",
+        json={"lines": lines},
+        headers={"Idempotency-Key": f"receive-invalid-{lines}"},
+    )
+    assert response.status_code in {409, 422}
+    async with transfer_session_factory() as session:
+        transfer = await session.get(StockTransfer, uuid.UUID(created["id"]))
+        assert transfer.status is StockTransferStatus.SENT
+        assert await session.get(StockBalance, (DESTINATION_ID, 901)) is None
+
+
+def test_stock_lock_helper_orders_branch_then_variant():
+    from app.services.inventory import stock_balances_lock_statement
+
+    statement = stock_balances_lock_statement(
+        [(DESTINATION_ID, 902), (ORIGIN_ID, 902), (ORIGIN_ID, 901)]
+    )
+    order_columns = [str(clause) for clause in statement._order_by_clauses]
+    assert order_columns == [
+        "stock_balances.branch_id",
+        "stock_balances.variant_id",
+    ]
+
+
+def test_api_contract_documents_transfer_workflow():
+    contract = Path(__file__).resolve().parents[2].joinpath("docs", "API_CONTRACT.md").read_text()
+    for text in (
+        "POST /inventory/transfers",
+        "GET /inventory/transfers",
+        "GET /inventory/transfers/{transfer_id}",
+        "POST /inventory/transfers/{transfer_id}/send",
+        "POST /inventory/transfers/{transfer_id}/receive",
+        "Idempotency-Key",
+        "transferencia_salida",
+        "transferencia_entrada",
+        "409",
+    ):
+        assert text in contract

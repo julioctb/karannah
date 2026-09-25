@@ -6,7 +6,7 @@
 - Route: organic development (ODD), delegated direct implementation
 - Repository branch at creation: `main`
 - Active feature branch: `feature/phase-5-transfers-counts`
-- Next task: `F5-01B`
+- Next task: `F5-02`
 - Delivery strategy: `ask-on-risk`
 - Chain strategy: `stacked-to-main`, selected by the user
 - Engram mirror: active
@@ -155,14 +155,14 @@ Transfers and physical counts currently exist only as isolated frontend demo sta
 
 ### F5-02 — Implement auditable, retry-safe transfers
 
-- [ ] Add reusable document-counter, idempotency, and deterministic stock-lock helpers without creating duplicate sources of truth.
-- [ ] Implement transfer creation, listing/detail, sending, and receiving.
-- [ ] Debit shipped quantities from origin atomically and append `transferencia_salida` entries.
-- [ ] Credit actual received quantities at destination atomically and append `transferencia_entrada` entries.
-- [ ] Persist shortages, reject over-receipt, and make send/receive retries idempotent.
-- [ ] Enforce role and branch visibility rules.
-- [ ] Add focused lifecycle, authorization, ledger, balance, and retry tests.
-- [ ] Update the API contract with requests, responses, errors, and idempotency behavior.
+- [x] Add reusable document-counter, idempotency, and deterministic stock-lock helpers without creating duplicate sources of truth.
+- [x] Implement transfer creation, listing/detail, sending, and receiving.
+- [x] Debit shipped quantities from origin atomically and append `transferencia_salida` entries.
+- [x] Credit actual received quantities at destination atomically and append `transferencia_entrada` entries.
+- [x] Persist shortages, reject over-receipt, and make send/receive retries idempotent.
+- [x] Enforce role and branch visibility rules.
+- [x] Add focused lifecycle, authorization, ledger, balance, and retry tests.
+- [x] Update the API contract with requests, responses, errors, and idempotency behavior.
 - Route: delegated writer.
 - Trigger evidence: multi-file domain/API implementation with transactional behavior.
 - Candidate surfaces:
@@ -177,7 +177,15 @@ Transfers and physical counts currently exist only as isolated frontend demo sta
   - full backend tests
   - Ruff
 - Forecast: ~450 authored changed lines; one honest review slice may exceed the heuristic if transactional cohesion requires it.
-- Evidence: pending.
+- Evidence:
+  - Started after `F5-01B` commit `684ffa3`.
+  - Read-only scout mapped existing POS idempotency/folio/lock helpers, inventory API/schema conventions, branch authorization dependencies, and test fixture patterns.
+  - Delegated writer left changes but returned a blocked/no-files summary, so parent treated writer evidence as unreliable and required independent verification from source and commands.
+  - Independent verification verdict: PASS, no findings; focused tests `36 passed in 0.82s`; full backend `127 passed in 4.09s`; Ruff all checks passed.
+  - Verifier confirmed endpoints, shared helpers, POS compatibility wrappers, both-branch visibility, atomic send/receive workflows, idempotency replay/409 behavior, and lifecycle/authorization/ledger/balance/lock-order/contract tests.
+  - Parent spot-check confirmed shared helper extraction in `backend/app/services/inventory.py`, POS wrappers in `backend/app/services/pos.py`, inventory transfer routes, and transfer schemas.
+  - Native review start for target `sha256:bf2397fee515fd17d92d92d3b08a67ad903d41357f355d5ca2899cb162bee33d` returned candidate-scoped `consent-declined-this-candidate`; no lineage was created. RDD fallback verification path was satisfied by independent verifier, but writer RED evidence is unavailable because the writer returned an inconsistent blocked/no-files summary after leaving changes.
+  - Work-unit commit was created as `5500e93 feat(inventory): implement transfer workflows`, then amended only to add this evidence note; the final amended identity is reported in the session output because a commit cannot contain its own final hash.
 
 ### F5-03 — Implement snapshot-based physical counts
 
@@ -283,10 +291,11 @@ Transfers and physical counts currently exist only as isolated frontend demo sta
 - Engram mirror is pending because the current memory session is already closed; the repository document was written and read back successfully.
 - The combined `F5-01` implementation and verification completed at 664 authored changed lines; the user selected a transfer/count split instead of `size:exception`.
 - `F5-01A` transfer-only foundations are implemented, independently verified, natively reviewed, acknowledged, and committed as `48de519 feat(inventory): add transfer document foundations`.
-- `F5-01B` physical-count foundations are implemented, independently verified, and committed.
+- `F5-01B` physical-count foundations are implemented, independently verified, and committed as `684ffa3 feat(inventory): add physical count foundations`.
+- `F5-02` transfer workflows are implemented, independently verified, and committed.
 - The user-level subagent routing blocker was resolved with explicit authorization.
-- Running authored line count: approximately 473 for the F5-01A source candidate, excluding the ODD task document.
+- Running authored line count: approximately 473 for F5-01A plus 397 for F5-01B, excluding ODD task-document-only changes.
 
 ## Next step
 
-Start `F5-02` for auditable, retry-safe transfer workflows.
+Start `F5-03` for snapshot-based physical-count workflows.

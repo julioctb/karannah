@@ -5,15 +5,11 @@ import json
 import uuid
 from datetime import UTC, datetime
 from decimal import ROUND_HALF_UP, Decimal
-from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
-from pydantic import BaseModel
 from sqlalchemy import func, select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_settings
 from app.models.cash import CashMovement, CashMovementType, CashSession, CashSessionStatus, Terminal
 from app.models.catalog import Product, ProductVariant
 from app.models.clients import Client, ClientType, CreditEntry, CreditMovementType
@@ -21,8 +17,6 @@ from app.models.identity import Branch, Role, UserProfile
 from app.models.inventory import StockBalance, StockEntry, StockMovementType
 from app.models.sales import (
     DiscountApproval,
-    FolioCounter,
-    IdempotencyRecord,
     Payment,
     PaymentMethod,
     Sale,
@@ -40,6 +34,12 @@ from app.schemas.sales import (
     SaleDetailRead,
     SaleItemRead,
 )
+from app.services.inventory import (
+    idempotency_record,
+    next_document_folio,
+    request_hash,
+    stock_balances_lock_statement,
+)
 
 CENT = Decimal("0.01")
 IVA_RATE = Decimal("0.16")
@@ -52,11 +52,6 @@ DISCOUNT_LIMITS = {
 
 def money(value: Decimal | int) -> Decimal:
     return Decimal(value).quantize(CENT, rounding=ROUND_HALF_UP)
-
-
-def request_hash(payload: BaseModel) -> str:
-    raw = json.dumps(payload.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(raw.encode()).hexdigest()
 
 
 def quote_fingerprint(quote: QuoteRead) -> str:
@@ -81,14 +76,9 @@ def quote_fingerprint(quote: QuoteRead) -> str:
 
 
 def stock_balance_lock_statement(branch_id: uuid.UUID, variant_ids: list[int]):
-    return (
-        select(StockBalance)
-        .where(
-            StockBalance.branch_id == branch_id,
-            StockBalance.variant_id.in_(variant_ids),
-        )
-        .order_by(StockBalance.variant_id)
-        .with_for_update()
+    """Compatibility wrapper for existing POS clients."""
+    return stock_balances_lock_statement(
+        [(branch_id, variant_id) for variant_id in variant_ids]
     )
 
 
@@ -212,68 +202,14 @@ async def _idempotency_record(
     key: str,
     payload_hash: str,
     endpoint: str = "sales.checkout",
-) -> IdempotencyRecord:
-    dialect = db.get_bind().dialect.name
-    if dialect == "postgresql":
-        await db.execute(
-            pg_insert(IdempotencyRecord)
-            .values(
-                id=uuid.uuid4(),
-                user_id=profile.id,
-                endpoint=endpoint,
-                key=key,
-                request_hash=payload_hash,
-            )
-            .on_conflict_do_nothing(index_elements=["user_id", "endpoint", "key"])
-        )
-    else:
-        existing = await db.scalar(
-            select(IdempotencyRecord).where(
-                IdempotencyRecord.user_id == profile.id,
-                IdempotencyRecord.endpoint == endpoint,
-                IdempotencyRecord.key == key,
-            )
-        )
-        if existing is None:
-            db.add(
-                IdempotencyRecord(
-                    user_id=profile.id,
-                    endpoint=endpoint,
-                    key=key,
-                    request_hash=payload_hash,
-                )
-            )
-            await db.flush()
-    record = await db.scalar(
-        select(IdempotencyRecord)
-        .where(
-            IdempotencyRecord.user_id == profile.id,
-            IdempotencyRecord.endpoint == endpoint,
-            IdempotencyRecord.key == key,
-        )
-        .with_for_update()
-    )
-    assert record is not None
-    if record.request_hash != payload_hash:
-        raise HTTPException(
-            status_code=409, detail="Idempotency-Key ya fue usado con otra solicitud"
-        )
-    return record
+):
+    """Compatibility wrapper around the shared idempotency implementation."""
+    return await idempotency_record(db, profile, key, payload_hash, endpoint)
 
 
 async def _next_folio(db: AsyncSession, branch: Branch) -> str:
-    year = datetime.now(ZoneInfo(get_settings().business_timezone)).year
-    key = {"document_type": "VTA", "branch_id": branch.id, "business_year": year}
-    if db.get_bind().dialect.name == "postgresql":
-        await db.execute(pg_insert(FolioCounter).values(**key).on_conflict_do_nothing())
-    elif await db.get(FolioCounter, ("VTA", branch.id, year)) is None:
-        db.add(FolioCounter(**key))
-        await db.flush()
-    counter = await db.scalar(select(FolioCounter).filter_by(**key).with_for_update())
-    assert counter is not None
-    number = counter.next_value
-    counter.next_value += 1
-    return f"VTA-{branch.code}-{year}-{number:06d}"
+    """Compatibility wrapper around the shared document counter."""
+    return await next_document_folio(db, branch, "VTA")
 
 
 def _aware_utc(value: datetime) -> datetime:
