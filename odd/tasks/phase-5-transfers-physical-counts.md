@@ -6,10 +6,10 @@
 - Route: organic development (ODD), delegated direct implementation
 - Repository branch at creation: `main`
 - Active feature branch: `feature/phase-5-transfers-counts`
-- Next task: `F5-01A`
+- Next task: `F5-01B`
 - Delivery strategy: `ask-on-risk`
 - Chain strategy: `stacked-to-main`, selected by the user
-- Engram mirror: pending; the current Engram session is already closed, while this repository copy remains authoritative
+- Engram mirror: active
 - Forecast: approximately 1,700 authored changed lines across six reviewable work units after the user-selected transfer/count foundation split; generated files excluded
 
 ## Objective
@@ -120,14 +120,14 @@ Transfers and physical counts currently exist only as isolated frontend demo sta
   - Parent spot-check found no remaining physical-count model/test/API vocabulary in the F5-01A candidate and confirmed transfer migration identity/scope.
   - Native review lineage `review-95cd850548171248` was authorized, captured with `review-reliability`, approved, and acknowledged; authority burned with evidence `gentle-ai.review-acknowledged/v1` for target `sha256:b8c5c7f4896a9c02d1ee7b3032ee6c84c05e58d30469c8397e22c51c8dd639ee`.
   - Non-blocking review advisories: folio format is not fully enforced at database level, and receipt state/timestamp coupling is not fully enforced at database level; both are informational and separate later work.
-  - Work-unit commit remains pending because commit requires explicit user authorization in this harness.
+  - Work-unit commit: `48de519 feat(inventory): add transfer document foundations`. The user declined amending that commit only to write this hash back into the document.
 
 ### F5-01B — Persist physical-count document foundations
 
-- [ ] Add physical-count lifecycle enums, models, relationships, quantity constraints, and exports after `F5-01A` closes.
-- [ ] Add count-only `0008_phase5_physical_counts.py` with `0007_phase5_transfers` as its predecessor.
-- [ ] Add database-backed count quantity tests and instantiated migration/model alignment coverage under strict TDD.
-- [ ] Add only `CF` lifecycle and count quantity vocabulary to the API contract.
+- [x] Add physical-count lifecycle enums, models, relationships, quantity constraints, and exports after `F5-01A` closes.
+- [x] Add count-only `0008_phase5_physical_counts.py` with `0007_phase5_transfers` as its predecessor.
+- [x] Add database-backed count quantity tests and instantiated migration/model alignment coverage under strict TDD.
+- [x] Add only `CF` lifecycle and count quantity vocabulary to the API contract.
 - Route: delegated writer.
 - Trigger evidence: user-selected review split creates a second cohesive multi-file foundation unit.
 - Candidate surfaces:
@@ -141,7 +141,17 @@ Transfers and physical counts currently exist only as isolated frontend demo sta
   - full backend tests
   - Ruff
 - Forecast: ~280 authored changed lines.
-- Evidence: pending after `F5-01A`.
+- Evidence:
+  - Started after `F5-01A` commit `48de519`.
+  - Initial delegated writer strict TDD: RED `13 failed, 11 passed in 0.31s`; GREEN `24 passed in 0.26s`; final focused `24 passed in 0.18s`; full backend `115 passed in 3.54s`; Ruff all checks passed.
+  - First independent verification failed: candidate used `expected_quantity`, `counted_quantity`, and `difference_quantity` instead of required `snapshot_quantity` and `observed_quantity`.
+  - Vocabulary correction strict TDD: RED `8 failed, 13 passed in 0.22s`; GREEN `21 passed in 0.20s`; full backend `112 passed in 3.39s`; Ruff all checks passed.
+  - Second independent verification failed: physical-count line identity used `count_id` instead of required `physical_count_id`.
+  - Foreign-key correction strict TDD: RED `1 failed, 20 passed`; GREEN `21 passed in 0.18s`; full backend `112 passed in 3.41s`; Ruff and diff check passed.
+  - Final independent verification verdict: PASS, no findings; focused tests `21 passed in 0.20s`; full backend `112 passed in 3.40s`; Ruff all checks passed.
+  - Parent spot-check confirmed `PhysicalCountLine` columns `physical_count_id`, `variant_id`, `snapshot_quantity`, `observed_quantity`, count-only `0008` migration chained from `0007_phase5_transfers`, and no deprecated count vocabulary in models/migration/API contract.
+  - Native review start for target `sha256:50d705df482d2ce3eded983694f1de2ca1757690097ac41ffd5efb514d1c6ca7` returned candidate-scoped `consent-declined-this-candidate`; no lineage was created. RDD fallback verification path was already satisfied by writer checks plus independent verifier.
+  - Work-unit commit was created as `603772f feat(inventory): add physical count foundations`, then amended only to add this evidence note; the final amended identity is reported in the session output because a commit cannot contain its own final hash.
 
 ### F5-02 — Implement auditable, retry-safe transfers
 
@@ -272,11 +282,11 @@ Transfers and physical counts currently exist only as isolated frontend demo sta
 - Product decisions captured from the user before implementation.
 - Engram mirror is pending because the current memory session is already closed; the repository document was written and read back successfully.
 - The combined `F5-01` implementation and verification completed at 664 authored changed lines; the user selected a transfer/count split instead of `size:exception`.
-- `F5-01A` transfer-only foundations are implemented and independently verified; physical-count foundations remain pending as `F5-01B`.
+- `F5-01A` transfer-only foundations are implemented, independently verified, natively reviewed, acknowledged, and committed as `48de519 feat(inventory): add transfer document foundations`.
+- `F5-01B` physical-count foundations are implemented, independently verified, and committed.
 - The user-level subagent routing blocker was resolved with explicit authorization.
-- No work-unit commits exist yet because commit needs explicit user authorization.
-- Running authored line count: approximately 473 for the F5-01A source candidate, excluding this ODD task document.
+- Running authored line count: approximately 473 for the F5-01A source candidate, excluding the ODD task document.
 
 ## Next step
 
-Get explicit authorization for the `F5-01A` work-unit commit, then commit the reviewed transfer-only foundation before starting `F5-01B`.
+Start `F5-02` for auditable, retry-safe transfer workflows.

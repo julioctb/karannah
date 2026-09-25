@@ -35,6 +35,11 @@ class StockTransferStatus(str, enum.Enum):
     RECEIVED = "received"
 
 
+class PhysicalCountStatus(str, enum.Enum):
+    OPEN = "open"
+    FINALIZED = "finalized"
+
+
 class StockEntry(Base):
     """Ledger inmutable de inventario por sucursal.
 
@@ -178,3 +183,71 @@ class StockTransferLine(Base):
     shortage_quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     transfer: Mapped[StockTransfer] = relationship(back_populates="lines")
+
+
+class PhysicalCount(Base):
+    __tablename__ = "physical_counts"
+    __table_args__ = (
+        CheckConstraint("folio LIKE 'CF-%'", name="ck_physical_counts_folio_prefix"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    folio: Mapped[str] = mapped_column(String(30), unique=True, index=True)
+    branch_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("branches.id", ondelete="RESTRICT"), index=True
+    )
+    status: Mapped[PhysicalCountStatus] = mapped_column(
+        Enum(
+            PhysicalCountStatus,
+            name="physical_count_status",
+            values_callable=lambda enum_type: [item.value for item in enum_type],
+        ),
+        default=PhysicalCountStatus.OPEN,
+        server_default=PhysicalCountStatus.OPEN.value,
+        index=True,
+    )
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("user_profiles.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    finalized_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("user_profiles.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+    finalized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    lines: Mapped[list[PhysicalCountLine]] = relationship(
+        back_populates="count", cascade="all, delete-orphan"
+    )
+
+
+class PhysicalCountLine(Base):
+    __tablename__ = "physical_count_lines"
+    __table_args__ = (
+        CheckConstraint(
+            "snapshot_quantity >= 0",
+            name="ck_physical_count_lines_snapshot_quantity_nonnegative",
+        ),
+        CheckConstraint(
+            "observed_quantity IS NULL OR observed_quantity >= 0",
+            name="ck_physical_count_lines_observed_quantity_nonnegative",
+        ),
+        UniqueConstraint(
+            "physical_count_id",
+            "variant_id",
+            name="uq_physical_count_lines_physical_count_variant",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    physical_count_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("physical_counts.id", ondelete="CASCADE"), index=True
+    )
+    variant_id: Mapped[int] = mapped_column(
+        ForeignKey("product_variants.id", ondelete="RESTRICT"), index=True
+    )
+    snapshot_quantity: Mapped[int] = mapped_column(Integer)
+    observed_quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    count: Mapped[PhysicalCount] = relationship(back_populates="lines")

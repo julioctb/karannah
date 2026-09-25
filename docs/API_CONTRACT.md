@@ -108,6 +108,15 @@ unica ruta operacional de datos.
   documentos no reemplazan a `StockEntry`, y `StockBalance` sigue siendo solo
   la proyeccion bloqueable.
 
+### Conteos fisicos (vocabulario de Fase 5)
+
+- Los folios de conteo fisico usan `CF-SUC-YEAR-NUMBER`; `CF` identifica el
+  documento de conteo de inventario de una sucursal.
+- Un conteo fisico recorre exclusivamente `open` y `finalized`.
+- Cada linea conserva la captura inicial inmutable en `snapshot_quantity` y la
+  cantidad relevada en `observed_quantity`, que permanece ausente hasta que la
+  variante sea contada.
+
 ## Clientes y credito
 
 - `GET /clients` devuelve `credit_balance` derivado de `credit_entries`.

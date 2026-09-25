@@ -22,6 +22,9 @@ from app.models.catalog import (
 from app.models.clients import Client, ClientType, CreditEntry, CreditMovementType
 from app.models.identity import Branch, Role, UserBranchAssignment, UserProfile
 from app.models.inventory import (
+    PhysicalCount,
+    PhysicalCountLine,
+    PhysicalCountStatus,
     StockBalance,
     StockEntry,
     StockMovementType,
@@ -60,6 +63,9 @@ __all__ = [
     "Material",
     "Payment",
     "PaymentMethod",
+    "PhysicalCount",
+    "PhysicalCountLine",
+    "PhysicalCountStatus",
     "Product",
     "ProductCollection",
     "ProductGroup",
