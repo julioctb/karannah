@@ -6,6 +6,8 @@ export const API_READ_VIEWS = new Set([
   "clients",
   "credits",
   "repairs",
+  "transfers",
+  "physicalcount",
 ]);
 export const API_WRITE_VIEWS = new Set([
   "categories",
@@ -14,6 +16,8 @@ export const API_WRITE_VIEWS = new Set([
   "clients",
   "credits",
   "sales",
+  "transfers",
+  "physicalcount",
 ]);
 
 export function mapCurrentUser(user) {

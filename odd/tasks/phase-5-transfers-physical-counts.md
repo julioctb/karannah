@@ -6,7 +6,7 @@
 - Route: organic development (ODD), delegated direct implementation
 - Repository branch at creation: `main`
 - Active feature branch: `feature/phase-5-transfers-counts`
-- Next task: `F5-03`
+- Next task: `F5-04`
 - Delivery strategy: `ask-on-risk`
 - Chain strategy: `stacked-to-main`, selected by the user
 - Engram mirror: active
@@ -224,11 +224,11 @@ Transfers and physical counts currently exist only as isolated frontend demo sta
 
 ### F5-04 — Connect frontend API and application state
 
-- [ ] Add transfer and physical-count API adapters and response mappers.
-- [ ] Preserve idempotency keys across uncertain retries and rotate them after validation errors.
-- [ ] Wire application actions and refresh behavior.
-- [ ] Mark transfer and physical-count views as API-backed.
-- [ ] Prefer screen-local loading for Phase 5 data instead of expanding the global initial preload.
+- [x] Add transfer and physical-count API adapters and response mappers.
+- [x] Preserve idempotency keys across uncertain retries and rotate them after validation errors.
+- [x] Wire application actions and refresh behavior.
+- [x] Mark transfer and physical-count views as API-backed.
+- [x] Prefer screen-local loading for Phase 5 data instead of expanding the global initial preload.
 - Route: delegated writer.
 - Trigger evidence: coordinated non-trivial changes across three frontend modules.
 - Candidate surfaces:
@@ -238,7 +238,20 @@ Transfers and physical counts currently exist only as isolated frontend demo sta
 - Checks:
   - frontend production build
 - Forecast: ~250 authored changed lines.
-- Evidence: pending.
+- Evidence:
+  - Started after `F5-03` commit `f5d38a1`.
+  - Read-only frontend scout mapped API adapter/action surfaces and confirmed F5-04 should not edit screens yet.
+  - Delegated writer left changes but returned a blocked/no-files summary, so parent treated writer evidence as unreliable and required independent verification from source and build.
+  - Independent verification found no implementation defect but initially marked FAIL only because its authorized commands did not include proving `screens/index.jsx` was untouched.
+  - Parent spot-check confirmed only `frontend/src/lib/api.js`, `frontend/src/App.jsx`, `frontend/src/domain/appModel.js`, and this ODD task document changed; `screens/index.jsx` was not modified.
+  - API adapters now map transfer/count list, detail, and mutation responses using visible branches plus product variants, preserve `observed_quantity: null`, and pass `Idempotency-Key` unchanged for send/receive/finalize.
+  - App actions expose screen-local loaders and mutators; send/receive/finalize refresh the global read model after success, while create/update actions do not.
+  - `transfers` and `physicalcount` are API-backed and writable in `frontend/src/domain/appModel.js`.
+  - Verification: `cd frontend && npm run build` passed; `git diff --check -- frontend/src/lib/api.js frontend/src/App.jsx frontend/src/domain/appModel.js` passed. Build emitted existing warning for `src/screens/index.jsx:4477` invalid `/* @__PURE__ */` annotation, unrelated to F5-04.
+  - Parent correction after spot-check: mutation adapters now return mapped frontend document shapes as well as list/detail adapters, so F5-05 screens can update local state from returned documents without waiting for global reload.
+  - Native review lineage `review-257fda28166b3365` approved and was acknowledged; authority burned with evidence `gentle-ai.review-acknowledged/v1` for target `sha256:68326a2f5d051c6a9ef32023de0fe2c954fdee9ee160c0957c019f95f23a05e2`.
+  - Non-blocking advisory: `R3-api-contract-tests` suggests future dedicated API-contract tests around the frontend adapters; informational only.
+  - Work-unit commit was created as `4c52c63 feat(frontend): connect phase five APIs`, then amended only to add this evidence note; the final amended identity is reported in the session output because a commit cannot contain its own final hash.
 
 ### F5-05 — Replace transfer and count demo screens
 
@@ -304,10 +317,11 @@ Transfers and physical counts currently exist only as isolated frontend demo sta
 - `F5-01A` transfer-only foundations are implemented, independently verified, natively reviewed, acknowledged, and committed as `48de519 feat(inventory): add transfer document foundations`.
 - `F5-01B` physical-count foundations are implemented, independently verified, and committed as `684ffa3 feat(inventory): add physical count foundations`.
 - `F5-02` transfer workflows are implemented, independently verified, and committed as `1c9e7c5 feat(inventory): implement transfer workflows`.
-- `F5-03` snapshot-based physical-count workflows are implemented, independently verified, and committed; native review escalated without approval.
+- `F5-03` snapshot-based physical-count workflows are implemented, independently verified, and committed as `f5d38a1 feat(inventory): implement physical count workflows`; native review escalated without approval.
+- `F5-04` frontend API integration is implemented, verified by build, natively reviewed, acknowledged, and committed.
 - The user-level subagent routing blocker was resolved with explicit authorization.
 - Running authored line count: approximately 473 for F5-01A plus 397 for F5-01B, excluding ODD task-document-only changes.
 
 ## Next step
 
-Start `F5-04` for frontend API integration.
+Start `F5-05` to replace transfer and physical-count demo screens with API-backed workflows.

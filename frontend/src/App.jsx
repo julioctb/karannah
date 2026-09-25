@@ -20,22 +20,32 @@ import {
   createDiscountApproval,
   createInventoryAdjustment,
   createMaterial,
+  createPhysicalCount,
   createProduct,
   createSubcategory,
+  createTransfer,
   deleteProductImage,
+  finalizePhysicalCount,
   getCashTerminals,
   getCurrentCashSession,
   getClientCreditLedger,
   getCreditRecoveryReport,
+  getPhysicalCountDetail,
+  getPhysicalCounts,
   getReadModel,
   getSaleDetail,
+  getTransferDetail,
+  getTransfers,
   openCashSession,
   quoteSale,
+  receiveTransfer,
+  sendTransfer,
   updateCategory,
   updateClient,
   updateClientCommercialProfile,
   updateCollection,
   updateMaterial,
+  updatePhysicalCountLines,
   updateProduct,
   updateSubcategory,
   updateVariant,
@@ -229,6 +239,74 @@ export default function App() {
       getCreditRecoveryReport(token, options, signal),
     getSaleDetail: (saleId, signal) =>
       getSaleDetail(token, saleId, user.branches || [], signal),
+    getTransfers: (signal) =>
+      getTransfers(token, readModel, user.branches || [], signal),
+    getTransferDetail: (transferId, signal) =>
+      getTransferDetail(
+        token,
+        transferId,
+        readModel,
+        user.branches || [],
+        signal,
+      ),
+    createTransfer: (payload) =>
+      createTransfer(token, payload, readModel, user.branches || []),
+    sendTransfer: async (transferId, payload, idempotencyKey) => {
+      const result = await sendTransfer(
+        token,
+        transferId,
+        payload,
+        idempotencyKey,
+        readModel,
+        user.branches || [],
+      );
+      refresh();
+      return result;
+    },
+    receiveTransfer: async (transferId, payload, idempotencyKey) => {
+      const result = await receiveTransfer(
+        token,
+        transferId,
+        payload,
+        idempotencyKey,
+        readModel,
+        user.branches || [],
+      );
+      refresh();
+      return result;
+    },
+    getPhysicalCounts: (signal) =>
+      getPhysicalCounts(token, readModel, user.branches || [], signal),
+    getPhysicalCountDetail: (countId, signal) =>
+      getPhysicalCountDetail(
+        token,
+        countId,
+        readModel,
+        user.branches || [],
+        signal,
+      ),
+    createPhysicalCount: (payload) =>
+      createPhysicalCount(token, payload, readModel, user.branches || []),
+    updatePhysicalCountLines: (countId, payload) =>
+      updatePhysicalCountLines(
+        token,
+        countId,
+        payload,
+        readModel,
+        user.branches || [],
+      ),
+    finalizePhysicalCount: async (countId, payload, idempotencyKey) => {
+      const result = await finalizePhysicalCount(
+        token,
+        countId,
+        payload,
+        idempotencyKey,
+        readModel,
+        user.branches || [],
+      );
+      refresh();
+      return result;
+    },
   };
   const view = React.createElement(
     CurrentView,

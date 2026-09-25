@@ -225,6 +225,113 @@ function mapCreditRecoveryReport(row) {
   };
 }
 
+function buildPhaseFiveLookups(readModel, branches) {
+  const branchById = new Map(branches.map((branch) => [branch.id, branch]));
+  const variantById = new Map();
+  for (const product of readModel.productos || []) {
+    for (const variant of product.variantes || []) {
+      variantById.set(variant.id, { product, variant });
+    }
+  }
+  return { branchById, variantById };
+}
+
+function mapTransfer(row, readModel, branches) {
+  const { branchById, variantById } = buildPhaseFiveLookups(
+    readModel,
+    branches,
+  );
+  const origin = branchById.get(row.origin_branch_id);
+  const destination = branchById.get(row.destination_branch_id);
+  const states = {
+    draft: "pendiente",
+    sent: "en_transito",
+    received: "recibido",
+  };
+  return {
+    id: row.id,
+    folio: row.folio,
+    status: row.status,
+    estado: states[row.status] || row.status,
+    originBranchId: row.origin_branch_id,
+    originBranchCode: origin?.code || "",
+    originBranchName: origin?.name || "",
+    destinationBranchId: row.destination_branch_id,
+    destinationBranchCode: destination?.code || "",
+    destinationBranchName: destination?.name || "",
+    origenId: origin?.code || row.origin_branch_id,
+    destinoId: destination?.code || row.destination_branch_id,
+    createdBy: row.created_by,
+    sentBy: row.sent_by,
+    receivedBy: row.received_by,
+    createdAt: row.created_at,
+    sentAt: row.sent_at,
+    receivedAt: row.received_at,
+    fecha: row.created_at.slice(0, 10),
+    productos: (row.lines || []).map((line) => {
+      const match = variantById.get(line.variant_id);
+      return {
+        id: line.id,
+        variantId: line.variant_id,
+        sku: match?.variant.sku || "",
+        nombre: match?.product.nombre || "Producto no disponible",
+        cantidad: line.shipped_quantity,
+        cantidadRecibida: line.received_quantity,
+        faltante: line.shortage_quantity,
+      };
+    }),
+  };
+}
+
+function mapPhysicalCount(row, readModel, branches) {
+  const { branchById, variantById } = buildPhaseFiveLookups(
+    readModel,
+    branches,
+  );
+  const branch = branchById.get(row.branch_id);
+  const states = { open: "en_proceso", finalized: "completado" };
+  const lineas = (row.lines || []).map((line) => {
+    const match = variantById.get(line.variant_id);
+    return {
+      id: line.id,
+      variantId: line.variant_id,
+      sku: match?.variant.sku || "",
+      nombre: match?.product.nombre || "Producto no disponible",
+      categoria: match?.product.categoria || "",
+      esperado: line.snapshot_quantity,
+      contado: line.observed_quantity,
+    };
+  });
+  const observacionesCompletas = lineas.every((line) => line.contado !== null);
+  const totalEsperado = lineas.reduce((total, line) => total + line.esperado, 0);
+  const observedTotal = lineas.reduce(
+    (total, line) => total + (line.contado ?? 0),
+    0,
+  );
+  const totalContado = observacionesCompletas ? observedTotal : null;
+  return {
+    id: row.id,
+    folio: row.folio,
+    branchId: row.branch_id,
+    sucursal: branch?.code || row.branch_id,
+    branchName: branch?.name || "",
+    status: row.status,
+    estado: states[row.status] || row.status,
+    createdBy: row.created_by,
+    finalizedBy: row.finalized_by,
+    createdAt: row.created_at,
+    finalizedAt: row.finalized_at,
+    fecha: row.created_at.slice(0, 10),
+    totalEsperado,
+    totalContado,
+    diferencia: observacionesCompletas
+      ? observedTotal - totalEsperado
+      : null,
+    observacionesCompletas,
+    lineas,
+  };
+}
+
 async function getAllRows(path, token, signal) {
   const pageSize = 500;
   const rows = [];
@@ -623,4 +730,126 @@ export async function cancelSale(token, saleId, payload, idempotencyKey, branche
     headers: { "Idempotency-Key": idempotencyKey },
   });
   return mapSaleDetail(row, new Map(branches.map((branch) => [branch.id, branch])));
+}
+
+export async function getTransfers(token, readModel, branches, signal) {
+  const rows = await getAllRows("/inventory/transfers", token, signal);
+  return rows.map((row) => mapTransfer(row, readModel, branches));
+}
+
+export async function getTransferDetail(
+  token,
+  transferId,
+  readModel,
+  branches,
+  signal,
+) {
+  const row = await request(`/inventory/transfers/${transferId}`, {
+    token,
+    signal,
+  });
+  return mapTransfer(row, readModel, branches);
+}
+
+export async function createTransfer(token, payload, readModel, branches) {
+  const row = await request("/inventory/transfers", {
+    token,
+    method: "POST",
+    body: payload,
+  });
+  return mapTransfer(row, readModel, branches);
+}
+
+export async function sendTransfer(
+  token,
+  transferId,
+  payload,
+  idempotencyKey,
+  readModel,
+  branches,
+) {
+  const row = await request(`/inventory/transfers/${transferId}/send`, {
+    token,
+    method: "POST",
+    body: payload,
+    headers: { "Idempotency-Key": idempotencyKey },
+  });
+  return mapTransfer(row, readModel, branches);
+}
+
+export async function receiveTransfer(
+  token,
+  transferId,
+  payload,
+  idempotencyKey,
+  readModel,
+  branches,
+) {
+  const row = await request(`/inventory/transfers/${transferId}/receive`, {
+    token,
+    method: "POST",
+    body: payload,
+    headers: { "Idempotency-Key": idempotencyKey },
+  });
+  return mapTransfer(row, readModel, branches);
+}
+
+export async function getPhysicalCounts(token, readModel, branches, signal) {
+  const rows = await getAllRows("/inventory/physical-counts", token, signal);
+  return rows.map((row) => mapPhysicalCount(row, readModel, branches));
+}
+
+export async function getPhysicalCountDetail(
+  token,
+  countId,
+  readModel,
+  branches,
+  signal,
+) {
+  const row = await request(`/inventory/physical-counts/${countId}`, {
+    token,
+    signal,
+  });
+  return mapPhysicalCount(row, readModel, branches);
+}
+
+export async function createPhysicalCount(token, payload, readModel, branches) {
+  const row = await request("/inventory/physical-counts", {
+    token,
+    method: "POST",
+    body: payload,
+  });
+  return mapPhysicalCount(row, readModel, branches);
+}
+
+export async function updatePhysicalCountLines(
+  token,
+  countId,
+  payload,
+  readModel,
+  branches,
+) {
+  const row = await request(`/inventory/physical-counts/${countId}/lines`, {
+    token,
+    method: "PATCH",
+    body: payload,
+  });
+  return mapPhysicalCount(row, readModel, branches);
+}
+
+export async function finalizePhysicalCount(
+  token,
+  countId,
+  payload,
+  idempotencyKey,
+  readModel,
+  branches,
+) {
+  const row = await request(`/inventory/physical-counts/${countId}/finalize`, {
+    token,
+    method: "POST",
+    body: payload,
+    headers: { "Idempotency-Key": idempotencyKey },
+  });
+  return mapPhysicalCount(row, readModel, branches);
 }
