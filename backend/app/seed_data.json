@@ -1,0 +1,994 @@
+{
+  "SUCURSALES": [
+    {
+      "id": "T01",
+      "nombre": "Centro Histórico",
+      "tipo": "tienda"
+    },
+    {
+      "id": "T02",
+      "nombre": "Plaza Universidad",
+      "tipo": "tienda"
+    },
+    {
+      "id": "A01",
+      "nombre": "Almacén Principal",
+      "tipo": "almacen"
+    }
+  ],
+  "CATEGORIAS": [
+    {
+      "clave": "AN",
+      "nombre": "Anillo",
+      "grupo": "joyeria"
+    },
+    {
+      "clave": "AR",
+      "nombre": "Arete",
+      "grupo": "joyeria"
+    },
+    {
+      "clave": "BR",
+      "nombre": "Brazalete",
+      "grupo": "joyeria"
+    },
+    {
+      "clave": "CA",
+      "nombre": "Cadena",
+      "grupo": "joyeria"
+    },
+    {
+      "clave": "CO",
+      "nombre": "Collar",
+      "grupo": "joyeria"
+    },
+    {
+      "clave": "DI",
+      "nombre": "Dije",
+      "grupo": "joyeria"
+    },
+    {
+      "clave": "PU",
+      "nombre": "Pulsera",
+      "grupo": "joyeria"
+    },
+    {
+      "clave": "JU",
+      "nombre": "Juego/Set",
+      "grupo": "joyeria"
+    },
+    {
+      "clave": "ES",
+      "nombre": "Estampa",
+      "grupo": "nojoyeria"
+    },
+    {
+      "clave": "AC",
+      "nombre": "Accesorio",
+      "grupo": "nojoyeria"
+    },
+    {
+      "clave": "MI",
+      "nombre": "Misceláneo",
+      "grupo": "nojoyeria"
+    }
+  ],
+  "MATERIALES": [
+    {
+      "clave": "PL",
+      "nombre": "Plata .925"
+    },
+    {
+      "clave": "OR",
+      "nombre": "Oro 14k"
+    },
+    {
+      "clave": "CH",
+      "nombre": "Chapa/Baño"
+    },
+    {
+      "clave": "AC",
+      "nombre": "Acero"
+    },
+    {
+      "clave": "BI",
+      "nombre": "Bisutería"
+    },
+    {
+      "clave": "OT",
+      "nombre": "Otro"
+    }
+  ],
+  "SUBCATEGORIAS_SEED": {
+    "AC": [
+      {
+        "id": 1,
+        "nombre": "Cuarzos y minerales",
+        "activa": true
+      },
+      {
+        "id": 2,
+        "nombre": "Ojos turcos y protección",
+        "activa": true
+      },
+      {
+        "id": 3,
+        "nombre": "Inciensos y sahumerios",
+        "activa": true
+      },
+      {
+        "id": 4,
+        "nombre": "Geometría sagrada y símbolos",
+        "activa": true
+      },
+      {
+        "id": 5,
+        "nombre": "Imágenes y figuras religiosas",
+        "activa": true
+      },
+      {
+        "id": 6,
+        "nombre": "Figuras y animales",
+        "activa": true
+      },
+      {
+        "id": 7,
+        "nombre": "Móviles, atrapasueños y colgantes",
+        "activa": true
+      },
+      {
+        "id": 8,
+        "nombre": "Péndulos, runas y tarot",
+        "activa": true
+      },
+      {
+        "id": 9,
+        "nombre": "Velas y veladoras",
+        "activa": true
+      },
+      {
+        "id": 10,
+        "nombre": "Decoración esotérica",
+        "activa": true
+      },
+      {
+        "id": 11,
+        "nombre": "Meditación y rituales",
+        "activa": true
+      },
+      {
+        "id": 12,
+        "nombre": "Audio",
+        "activa": true
+      },
+      {
+        "id": 99,
+        "nombre": "Por clasificar",
+        "activa": true,
+        "sistema": true
+      }
+    ],
+    "MI": [
+      {
+        "id": 1,
+        "nombre": "Velas y veladoras",
+        "activa": true
+      },
+      {
+        "id": 2,
+        "nombre": "Esencias, sprays y polvos",
+        "activa": true
+      },
+      {
+        "id": 3,
+        "nombre": "Flores de Bach y herbolaria",
+        "activa": true
+      },
+      {
+        "id": 4,
+        "nombre": "Aguas y lociones rituales",
+        "activa": true
+      },
+      {
+        "id": 5,
+        "nombre": "Cuidado personal",
+        "activa": true
+      },
+      {
+        "id": 6,
+        "nombre": "Aromatización de ambiente",
+        "activa": true
+      },
+      {
+        "id": 7,
+        "nombre": "Limpieza de joyería",
+        "activa": true
+      },
+      {
+        "id": 8,
+        "nombre": "Imán y varios",
+        "activa": true
+      },
+      {
+        "id": 99,
+        "nombre": "Por clasificar",
+        "activa": true,
+        "sistema": true
+      }
+    ],
+    "ES": [
+      {
+        "id": 1,
+        "nombre": "Estampa religiosa",
+        "activa": true
+      },
+      {
+        "id": 99,
+        "nombre": "Por clasificar",
+        "activa": true,
+        "sistema": true
+      }
+    ]
+  },
+  "COLECCIONES_SEED": [
+    {
+      "id": 1,
+      "nombre": "Protección",
+      "activa": true
+    },
+    {
+      "id": 2,
+      "nombre": "Amor",
+      "activa": true
+    },
+    {
+      "id": 3,
+      "nombre": "Prosperidad",
+      "activa": true
+    },
+    {
+      "id": 4,
+      "nombre": "Salud",
+      "activa": true
+    },
+    {
+      "id": 5,
+      "nombre": "Suerte",
+      "activa": true
+    },
+    {
+      "id": 6,
+      "nombre": "Limpieza",
+      "activa": true
+    },
+    {
+      "id": 7,
+      "nombre": "Armonía",
+      "activa": true
+    },
+    {
+      "id": 8,
+      "nombre": "Meditación",
+      "activa": true
+    },
+    {
+      "id": 9,
+      "nombre": "Día de las madres",
+      "activa": true
+    },
+    {
+      "id": 10,
+      "nombre": "Bautizos y comuniones",
+      "activa": true
+    }
+  ],
+  "PRODUCTOS": [
+    {
+      "id": 1,
+      "sku": "AN-OR-0001",
+      "nombre": "Anillo Ojo Turco Oro 14K",
+      "categoria": "AN",
+      "material": "OR",
+      "subcategoria": null,
+      "colecciones": [
+        1
+      ],
+      "piedra": "Ojo turco",
+      "precio_costo": 4500,
+      "precio_menudeo": 6750,
+      "precio_mayoreo": 5738,
+      "estado": "disponible",
+      "stock": 3
+    },
+    {
+      "id": 2,
+      "sku": "PU-OT-0001",
+      "nombre": "Pulsera 7 Nudos Roja",
+      "categoria": "PU",
+      "material": "OT",
+      "subcategoria": null,
+      "colecciones": [
+        1
+      ],
+      "piedra": null,
+      "precio_costo": 85,
+      "precio_menudeo": 180,
+      "precio_mayoreo": 150,
+      "estado": "disponible",
+      "stock": 25
+    },
+    {
+      "id": 3,
+      "sku": "DI-PL-0001",
+      "nombre": "Dije Elefante de la Suerte",
+      "categoria": "DI",
+      "material": "PL",
+      "subcategoria": null,
+      "colecciones": [
+        5
+      ],
+      "piedra": null,
+      "precio_costo": 650,
+      "precio_menudeo": 1200,
+      "precio_mayoreo": 980,
+      "estado": "disponible",
+      "stock": 8
+    },
+    {
+      "id": 19,
+      "sku": "DI-PL-0002",
+      "nombre": "Dije Mano de Fátima",
+      "categoria": "DI",
+      "material": "PL",
+      "subcategoria": null,
+      "colecciones": [
+        5
+      ],
+      "piedra": null,
+      "precio_costo": 650,
+      "precio_menudeo": 1240,
+      "precio_mayoreo": 1000,
+      "estado": "disponible",
+      "stock": 10
+    },
+    {
+      "id": 4,
+      "sku": "AN-OR-0002",
+      "nombre": "Anillo Compromiso Diamante",
+      "categoria": "AN",
+      "material": "OR",
+      "subcategoria": null,
+      "colecciones": [
+        2
+      ],
+      "piedra": "Diamante 0.25ct",
+      "precio_costo": 12500,
+      "precio_menudeo": 18750,
+      "precio_mayoreo": 15938,
+      "estado": "disponible",
+      "stock": 2
+    },
+    {
+      "id": 5,
+      "sku": "CO-OR-0001",
+      "nombre": "Collar Mano de Fátima",
+      "categoria": "CO",
+      "material": "OR",
+      "subcategoria": null,
+      "colecciones": [
+        1
+      ],
+      "piedra": null,
+      "precio_costo": 3200,
+      "precio_menudeo": 4800,
+      "precio_mayoreo": 4080,
+      "estado": "disponible",
+      "stock": 4
+    },
+    {
+      "id": 6,
+      "sku": "AR-PL-0001",
+      "nombre": "Aretes Cuarzo Rosa",
+      "categoria": "AR",
+      "material": "PL",
+      "subcategoria": null,
+      "colecciones": [
+        2
+      ],
+      "piedra": "Cuarzo rosa",
+      "precio_costo": 420,
+      "precio_menudeo": 750,
+      "precio_mayoreo": 638,
+      "estado": "disponible",
+      "stock": 6
+    },
+    {
+      "id": 7,
+      "sku": "BR-AC-0001",
+      "nombre": "Brazalete Ojo de Tigre",
+      "categoria": "BR",
+      "material": "AC",
+      "subcategoria": null,
+      "colecciones": [
+        3
+      ],
+      "piedra": "Ojo de tigre",
+      "precio_costo": 380,
+      "precio_menudeo": 680,
+      "precio_mayoreo": 578,
+      "estado": "disponible",
+      "stock": 5
+    },
+    {
+      "id": 8,
+      "sku": "PU-OT-0002",
+      "nombre": "Pulsera Obsidiana Negra",
+      "categoria": "PU",
+      "material": "OT",
+      "subcategoria": null,
+      "colecciones": [
+        1
+      ],
+      "piedra": "Obsidiana",
+      "precio_costo": 150,
+      "precio_menudeo": 320,
+      "precio_mayoreo": 272,
+      "estado": "externo",
+      "stock": 0
+    },
+    {
+      "id": 9,
+      "sku": "AC-0001",
+      "nombre": "Veladora Roja del Amor",
+      "categoria": "AC",
+      "material": null,
+      "subcategoria": "Velas y veladoras",
+      "colecciones": [
+        2
+      ],
+      "piedra": null,
+      "precio_costo": 45,
+      "precio_menudeo": 95,
+      "precio_mayoreo": 75,
+      "estado": "disponible",
+      "stock": 20
+    },
+    {
+      "id": 10,
+      "sku": "AC-0002",
+      "nombre": "Incienso Palo Santo x10",
+      "categoria": "AC",
+      "material": null,
+      "subcategoria": "Inciensos y sahumerios",
+      "colecciones": [
+        6
+      ],
+      "piedra": null,
+      "precio_costo": 80,
+      "precio_menudeo": 150,
+      "precio_mayoreo": 120,
+      "estado": "disponible",
+      "stock": 35
+    },
+    {
+      "id": 11,
+      "sku": "AC-0003",
+      "nombre": "Cuarzo Rosa en Bruto",
+      "categoria": "AC",
+      "material": null,
+      "subcategoria": "Cuarzos y minerales",
+      "colecciones": [
+        2
+      ],
+      "piedra": "Cuarzo rosa",
+      "precio_costo": 120,
+      "precio_menudeo": 250,
+      "precio_mayoreo": 200,
+      "estado": "disponible",
+      "stock": 15
+    },
+    {
+      "id": 12,
+      "sku": "AC-0004",
+      "nombre": "Tarot Rider Waite",
+      "categoria": "AC",
+      "material": null,
+      "subcategoria": "Péndulos, runas y tarot",
+      "colecciones": [],
+      "piedra": null,
+      "precio_costo": 280,
+      "precio_menudeo": 550,
+      "precio_mayoreo": 450,
+      "estado": "disponible",
+      "stock": 8
+    },
+    {
+      "id": 13,
+      "sku": "AC-0005",
+      "nombre": "Atrapasueños Grande",
+      "categoria": "AC",
+      "material": null,
+      "subcategoria": "Móviles, atrapasueños y colgantes",
+      "colecciones": [
+        1
+      ],
+      "piedra": null,
+      "precio_costo": 180,
+      "precio_menudeo": 380,
+      "precio_mayoreo": 320,
+      "estado": "disponible",
+      "stock": 6
+    },
+    {
+      "id": 14,
+      "sku": "AC-0006",
+      "nombre": "Figura Buda Meditando",
+      "categoria": "AC",
+      "material": null,
+      "subcategoria": "Figuras y animales",
+      "colecciones": [
+        7,
+        8
+      ],
+      "piedra": null,
+      "precio_costo": 220,
+      "precio_menudeo": 450,
+      "precio_mayoreo": 380,
+      "estado": "disponible",
+      "stock": 4
+    },
+    {
+      "id": 15,
+      "sku": "MI-0001",
+      "nombre": "Aceite Esencial Lavanda",
+      "categoria": "MI",
+      "material": null,
+      "subcategoria": "Esencias, sprays y polvos",
+      "colecciones": [
+        7
+      ],
+      "piedra": null,
+      "precio_costo": 95,
+      "precio_menudeo": 180,
+      "precio_mayoreo": 150,
+      "estado": "disponible",
+      "stock": 12
+    },
+    {
+      "id": 16,
+      "sku": "MI-0002",
+      "nombre": "Agua de Florida",
+      "categoria": "MI",
+      "material": null,
+      "subcategoria": "Aguas y lociones rituales",
+      "colecciones": [
+        6
+      ],
+      "piedra": null,
+      "precio_costo": 65,
+      "precio_menudeo": 120,
+      "precio_mayoreo": 100,
+      "estado": "disponible",
+      "stock": 18
+    },
+    {
+      "id": 17,
+      "sku": "MI-0003",
+      "nombre": "Jabón de Ruda",
+      "categoria": "MI",
+      "material": null,
+      "subcategoria": "Cuidado personal",
+      "colecciones": [
+        1,
+        6
+      ],
+      "piedra": null,
+      "precio_costo": 35,
+      "precio_menudeo": 75,
+      "precio_mayoreo": 60,
+      "estado": "disponible",
+      "stock": 25
+    },
+    {
+      "id": 18,
+      "sku": "ES-0001",
+      "nombre": "Estampa Virgen de Guadalupe",
+      "categoria": "ES",
+      "material": null,
+      "subcategoria": "Estampa religiosa",
+      "colecciones": [
+        1
+      ],
+      "piedra": null,
+      "precio_costo": 8,
+      "precio_menudeo": 20,
+      "precio_mayoreo": 15,
+      "estado": "disponible",
+      "stock": 50
+    }
+  ],
+  "CLIENTES": [
+    {
+      "id": 1,
+      "nombre": "María González Pérez",
+      "tipo": "mayoreo",
+      "telefono": "55 1234 5678",
+      "email": "maria.gp@email.com",
+      "saldo": 45200,
+      "limiteCredito": 80000
+    },
+    {
+      "id": 2,
+      "nombre": "Joyería El Diamante SA",
+      "tipo": "mayoreo",
+      "telefono": "55 9876 5432",
+      "email": "compras@eldiamante.mx",
+      "saldo": 0,
+      "limiteCredito": 200000
+    },
+    {
+      "id": 3,
+      "nombre": "Roberto Hernández",
+      "tipo": "menudeo",
+      "telefono": "55 5555 1234",
+      "email": "roberto.h@gmail.com",
+      "saldo": 0,
+      "limiteCredito": null
+    },
+    {
+      "id": 4,
+      "nombre": "Ana Martínez",
+      "tipo": "menudeo",
+      "telefono": "55 4321 8765",
+      "email": "ana.mtz@outlook.com",
+      "saldo": 8500,
+      "limiteCredito": null
+    },
+    {
+      "id": 5,
+      "nombre": "Distribuidora Oro Fino",
+      "tipo": "mayoreo",
+      "telefono": "33 1122 3344",
+      "email": "ventas@orofino.mx",
+      "saldo": 125000,
+      "limiteCredito": 150000
+    }
+  ],
+  "REPARACIONES": [
+    {
+      "id": 1,
+      "cliente": "María González",
+      "producto": "Anillo Oro 14K",
+      "servicio": "Ajuste talla",
+      "estado": "recibido",
+      "fecha": "2026-08-10",
+      "estimada": "2026-08-15"
+    },
+    {
+      "id": 2,
+      "cliente": "Roberto Hernández",
+      "producto": "Pulsera Tennis",
+      "servicio": "Cambio piedra",
+      "estado": "pendiente_taller",
+      "fecha": "2026-08-08",
+      "estimada": "2026-08-18"
+    },
+    {
+      "id": 3,
+      "cliente": "Ana Martínez",
+      "producto": "Collar Veneciano",
+      "servicio": "Limpieza profunda",
+      "estado": "en_proceso",
+      "fecha": "2026-08-05",
+      "estimada": "2026-08-12"
+    },
+    {
+      "id": 4,
+      "cliente": "Carlos López",
+      "producto": "Reloj Automático",
+      "servicio": "Restauración",
+      "estado": "terminado",
+      "fecha": "2026-08-01",
+      "estimada": "2026-08-10"
+    },
+    {
+      "id": 5,
+      "cliente": "Laura Sánchez",
+      "producto": "Aretes Esmeralda",
+      "servicio": "Engaste",
+      "estado": "enviado",
+      "fecha": "2026-08-06",
+      "estimada": "2026-08-16"
+    }
+  ],
+  "VENTAS_DEMO": [
+    {
+      "id": 467,
+      "folio": "V-00467",
+      "fecha": "2026-08-15",
+      "hora": "12:42",
+      "cliente": "Público general",
+      "vendedor": "Ana García",
+      "tipoVenta": "menudeo",
+      "condicion": "contado",
+      "tipoPago": "tarjeta",
+      "sucursal": "Centro Histórico",
+      "items": [
+        {
+          "sku": "AN-OR-0001",
+          "nombre": "Anillo Ojo Turco Oro 14K",
+          "cantidad": 1,
+          "precioUnitario": 6750
+        }
+      ]
+    },
+    {
+      "id": 466,
+      "folio": "V-00466",
+      "fecha": "2026-08-15",
+      "hora": "11:18",
+      "cliente": "María González Pérez",
+      "vendedor": "Carlos Mendoza",
+      "tipoVenta": "mayoreo",
+      "condicion": "credito",
+      "tipoPago": "credito",
+      "sucursal": "Centro Histórico",
+      "items": [
+        {
+          "sku": "CO-OR-0001",
+          "nombre": "Collar Mano de Fátima",
+          "cantidad": 5,
+          "precioUnitario": 4080
+        },
+        {
+          "sku": "AN-OR-0001",
+          "nombre": "Anillo Ojo Turco Oro 14K",
+          "cantidad": 4,
+          "precioUnitario": 5738
+        },
+        {
+          "sku": "DI-PL-0001",
+          "nombre": "Dije Elefante de la Suerte",
+          "cantidad": 2,
+          "precioUnitario": 924
+        }
+      ]
+    },
+    {
+      "id": 465,
+      "folio": "V-00465",
+      "fecha": "2026-08-15",
+      "hora": "10:04",
+      "cliente": "Roberto Hernández",
+      "vendedor": "Ana García",
+      "tipoVenta": "menudeo",
+      "condicion": "contado",
+      "tipoPago": "efectivo",
+      "sucursal": "Centro Histórico",
+      "items": [
+        {
+          "sku": "DI-PL-0001",
+          "nombre": "Dije Elefante de la Suerte",
+          "cantidad": 1,
+          "precioUnitario": 1200
+        }
+      ]
+    },
+    {
+      "id": 464,
+      "folio": "V-00464",
+      "fecha": "2026-08-14",
+      "hora": "17:36",
+      "cliente": "Joyería El Diamante SA",
+      "vendedor": "Laura Jiménez",
+      "tipoVenta": "mayoreo",
+      "condicion": "contado",
+      "tipoPago": "transferencia",
+      "sucursal": "Plaza Universidad",
+      "items": [
+        {
+          "sku": "AN-OR-0001",
+          "nombre": "Anillo Ojo Turco Oro 14K",
+          "cantidad": 10,
+          "precioUnitario": 5738
+        }
+      ]
+    },
+    {
+      "id": 463,
+      "folio": "V-00463",
+      "fecha": "2026-08-14",
+      "hora": "15:09",
+      "cliente": "Ana Martínez",
+      "vendedor": "Laura Jiménez",
+      "tipoVenta": "menudeo",
+      "condicion": "contado",
+      "tipoPago": "tarjeta",
+      "sucursal": "Plaza Universidad",
+      "items": [
+        {
+          "sku": "CO-OR-0001",
+          "nombre": "Collar Mano de Fátima",
+          "cantidad": 1,
+          "precioUnitario": 4800
+        },
+        {
+          "sku": "AC-0006",
+          "nombre": "Figura Buda Meditando",
+          "cantidad": 1,
+          "precioUnitario": 450
+        },
+        {
+          "sku": "AC-0004",
+          "nombre": "Tarot Rider Waite",
+          "cantidad": 1,
+          "precioUnitario": 550
+        },
+        {
+          "sku": "PU-OT-0001",
+          "nombre": "Pulsera 7 Nudos Roja",
+          "cantidad": 15,
+          "precioUnitario": 180
+        }
+      ]
+    },
+    {
+      "id": 462,
+      "folio": "V-00462",
+      "fecha": "2026-08-13",
+      "hora": "13:22",
+      "cliente": "Distribuidora Oro Fino",
+      "vendedor": "Carlos Mendoza",
+      "tipoVenta": "mayoreo",
+      "condicion": "credito",
+      "tipoPago": "credito",
+      "sucursal": "Centro Histórico",
+      "items": [
+        {
+          "sku": "CO-OR-0001",
+          "nombre": "Collar Mano de Fátima",
+          "cantidad": 4,
+          "precioUnitario": 4080
+        },
+        {
+          "sku": "DI-PL-0001",
+          "nombre": "Dije Elefante de la Suerte",
+          "cantidad": 8,
+          "precioUnitario": 980
+        },
+        {
+          "sku": "PU-OT-0001",
+          "nombre": "Pulsera 7 Nudos Roja",
+          "cantidad": 4,
+          "precioUnitario": 210
+        }
+      ]
+    },
+    {
+      "id": 461,
+      "folio": "V-00461",
+      "fecha": "2026-08-12",
+      "hora": "18:41",
+      "cliente": "Público general",
+      "vendedor": "Laura Jiménez",
+      "tipoVenta": "menudeo",
+      "condicion": "contado",
+      "tipoPago": "efectivo",
+      "sucursal": "Plaza Universidad",
+      "items": [
+        {
+          "sku": "AC-0001",
+          "nombre": "Veladora Roja del Amor",
+          "cantidad": 10,
+          "precioUnitario": 95
+        }
+      ]
+    },
+    {
+      "id": 460,
+      "folio": "V-00460",
+      "fecha": "2026-08-10",
+      "hora": "16:12",
+      "cliente": "Público general",
+      "vendedor": "Ana García",
+      "tipoVenta": "menudeo",
+      "condicion": "contado",
+      "tipoPago": "tarjeta",
+      "sucursal": "Centro Histórico",
+      "items": [
+        {
+          "sku": "CO-OR-0001",
+          "nombre": "Collar Mano de Fátima",
+          "cantidad": 1,
+          "precioUnitario": 4800
+        }
+      ]
+    },
+    {
+      "id": 459,
+      "folio": "V-00459",
+      "fecha": "2026-08-08",
+      "hora": "12:05",
+      "cliente": "María González Pérez",
+      "vendedor": "Carlos Mendoza",
+      "tipoVenta": "mayoreo",
+      "condicion": "contado",
+      "tipoPago": "transferencia",
+      "sucursal": "Centro Histórico",
+      "items": [
+        {
+          "sku": "AN-OR-0002",
+          "nombre": "Anillo Compromiso Diamante",
+          "cantidad": 1,
+          "precioUnitario": 15938
+        }
+      ]
+    },
+    {
+      "id": 458,
+      "folio": "V-00458",
+      "fecha": "2026-08-05",
+      "hora": "11:47",
+      "cliente": "Joyería El Diamante SA",
+      "vendedor": "Laura Jiménez",
+      "tipoVenta": "mayoreo",
+      "condicion": "credito",
+      "tipoPago": "credito",
+      "sucursal": "Plaza Universidad",
+      "items": [
+        {
+          "sku": "DI-PL-0002",
+          "nombre": "Dije Mano de Fátima",
+          "cantidad": 5,
+          "precioUnitario": 1240
+        }
+      ]
+    },
+    {
+      "id": 457,
+      "folio": "V-00457",
+      "fecha": "2026-08-03",
+      "hora": "14:31",
+      "cliente": "Público general",
+      "vendedor": "Ana García",
+      "tipoVenta": "menudeo",
+      "condicion": "contado",
+      "tipoPago": "efectivo",
+      "sucursal": "Centro Histórico",
+      "items": [
+        {
+          "sku": "AC-0004",
+          "nombre": "Tarot Rider Waite",
+          "cantidad": 1,
+          "precioUnitario": 550
+        }
+      ]
+    },
+    {
+      "id": 456,
+      "folio": "V-00456",
+      "fecha": "2026-08-01",
+      "hora": "10:16",
+      "cliente": "Distribuidora Oro Fino",
+      "vendedor": "Carlos Mendoza",
+      "tipoVenta": "mayoreo",
+      "condicion": "contado",
+      "tipoPago": "transferencia",
+      "sucursal": "Centro Histórico",
+      "items": [
+        {
+          "sku": "CO-OR-0001",
+          "nombre": "Collar Mano de Fátima",
+          "cantidad": 10,
+          "precioUnitario": 4080
+        },
+        {
+          "sku": "PU-OT-0001",
+          "nombre": "Pulsera 7 Nudos Roja",
+          "cantidad": 28,
+          "precioUnitario": 150
+        }
+      ]
+    }
+  ]
+}

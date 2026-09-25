@@ -1,0 +1,26 @@
+# Node / frontend
+node_modules/
+dist/
+*.local
+
+# Python / backend
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+backend/media/
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+# Local Pi runtime state
+.atl/

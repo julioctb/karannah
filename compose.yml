@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: joyeria
+      POSTGRES_USER: joyeria
+      POSTGRES_PASSWORD: joyeria_local
+    ports:
+      - "54329:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U joyeria -d joyeria"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+    volumes:
+      - joyeria_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  joyeria_postgres_data:

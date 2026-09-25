@@ -1,0 +1,83 @@
+# Cambios recientes
+
+## 2026-09-22 — Cierre operativo del siguiente bloque de Fase 4
+
+### Implementado
+
+- Las ventas tienen estado persistido y cancelación idempotente con reversos
+  auditables de stock, pagos, caja y crédito.
+- El POS genera autorizaciones de descuento para otro usuario y consume el
+  identificador durante el checkout.
+- Crédito expone historial paginado con referencia, sucursal y movimiento.
+- Crédito expone reporte de recuperación con filtros de sucursal y periodo,
+  saldos pendientes, cargos, recuperaciones y último abono.
+- Ventas y créditos incluyen las acciones nuevas en React con permisos de rol.
+- Se agregó la migración `0006_sale_lifecycle_credit_ledger`.
+
+### Verificación
+
+- Backend: `91 passed` con `backend/.venv/bin/pytest -q`.
+- Backend: `backend/.venv/bin/ruff check --no-cache app tests alembic` sin errores.
+- Frontend: `npm run build` correcto.
+- El build mantiene una advertencia no fatal preexistente sobre una anotación
+  `@__PURE__` en `src/screens/index.jsx:4477`.
+
+### Pendiente
+
+- Pruebas de migración y concurrencia sobre PostgreSQL real; Docker Desktop no
+  tenía el daemon disponible durante esta verificación.
+- Fases posteriores y pruebas de concurrencia sobre PostgreSQL real.
+
+## 2026-09-22 — Integración prioritaria de Fase 4
+
+### Implementado
+
+- El POS usa productos y variantes reales del API, cotización server-side y
+  checkout transaccional.
+- El POS exige una sesión de caja abierta, permite apertura y cierre según rol y
+  conserva el carrito si el checkout falla.
+- El alta de cliente desde POS espera la respuesta del API y selecciona el
+  cliente creado solo después de completar la operación.
+- Ventas ahora muestran detalle real con partidas, pagos y vendedor.
+- Créditos dejó de usar la tabla demo y muestra saldos derivados de clientes y
+  del ledger; registra abonos con método y sesión de caja cuando corresponde.
+- Se agregó `Idempotency-Key` obligatorio para abonos y se conserva el mismo
+  resultado ante reintentos idénticos.
+- El checkout rechaza deuda nueva para clientes menudeo.
+- Se eliminaron las implementaciones demo antiguas del POS y de créditos.
+
+### Verificación
+
+- Backend: `88 passed` con `pytest -q`.
+- Backend: `ruff check --no-cache app tests alembic` sin errores.
+- Frontend: `npm run build` correcto.
+- El build mantiene una advertencia no fatal preexistente sobre una anotación
+  `@__PURE__` en `src/screens/index.jsx:4477`.
+
+### Fuera de esta entrega
+
+- Estados de venta, cancelaciones y devoluciones.
+- Historial paginado de movimientos de crédito y reportes de cobranza.
+- Flujo de aprobación iniciado desde el POS para coordinar dos usuarios.
+- Pruebas de concurrencia ejecutadas contra PostgreSQL real; Docker no estaba
+  disponible durante la verificación.
+- Traspasos, conteos, reparaciones operativas, promociones, reportes y
+  configuración persistente.
+
+## 2026-09-22 — Confiabilidad de POS y listados
+
+### Implementado
+
+- Checkout y abonos conservan la misma clave de idempotencia cuando un fallo de
+  red deja incierto el resultado; los errores de validación permiten iniciar una
+  nueva operación.
+- POS y créditos permiten elegir la sucursal de operación y consultan terminal,
+  caja y existencias dentro de ese alcance.
+- `getReadModel` dejó de truncar todos los listados en 500 filas y ahora solicita
+  páginas sucesivas hasta completar cada colección.
+
+### Verificación
+
+- Backend: `88 passed` con `pytest -q`.
+- Backend: `ruff check --no-cache app tests alembic` sin errores.
+- Frontend: `npm run build` correcto.
