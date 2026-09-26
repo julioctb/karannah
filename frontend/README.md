@@ -22,11 +22,11 @@ npm run preview   # sirve dist/ localmente
 ```
 
 The frontend uses FastAPI for local authentication, catalog, inventory, clients,
-sales, cash management, POS, credits, and transfer history. In the current Phase 5
-slice, the transfer screen provides an API-backed read-only list; transfer create,
-send, and receive controls remain pending. Physical counts, promotions, reports,
-and configuration retain isolated demo data until their corresponding slices.
-Supabase will be introduced in Phase 9 and used only for authentication.
+sales, cash management, POS, credits, and transfers. The transfer screen lists,
+creates, sends, and receives persisted transfer documents through the API. Physical
+counts, promotions, reports, and configuration retain isolated demo data until
+their corresponding slices. Supabase will be introduced in Phase 9 and used only
+for authentication.
 
 Si npm falla con `EACCES` en la caché global, usa una caché temporal:
 

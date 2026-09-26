@@ -9210,13 +9210,24 @@ function ClientsView({
     }),
   );
 }
-function TransfersView({ currentUser, actions = {} }) {
+function TransfersView({ productos = [], sucursales = [], currentUser, actions = {} }) {
   const h = React.createElement;
   const authorized = ["admin", "encargado"].includes(currentUser?.rol);
   const [transfers, setTransfers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("all");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [originId, setOriginId] = useState("");
+  const [destinationId, setDestinationId] = useState("");
+  const [search, setSearch] = useState("");
+  const [selectedLines, setSelectedLines] = useState([]);
+  const [receiveDocument, setReceiveDocument] = useState(null);
+  const [receiveLines, setReceiveLines] = useState([]);
+  const [mutation, setMutation] = useState("");
+  const sendKeys = React.useRef(new Map());
+  const receiveKeys = React.useRef(new Map());
+  const receiveDrafts = React.useRef(new Map());
 
   const loadTransfers = async () => {
     setLoading(true);
@@ -9248,7 +9259,154 @@ function TransfersView({ currentUser, actions = {} }) {
     en_transito: { color: "gold", label: "En Tránsito" },
     recibido: { color: "success", label: "Recibido" },
   };
+  const clampInteger = (value, minimum, maximum) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return minimum;
+    return Math.max(minimum, Math.min(maximum, Math.trunc(parsed)));
+  };
+  const availableVariants = originId
+    ? productos.flatMap((product) =>
+        (product.variantes || [])
+          .filter((variant) => variant.estado === "disponible" && Number(variant.stockByBranch?.[originId] || 0) > 0)
+          .map((variant) => ({
+            variantId: variant.id,
+            sku: variant.sku,
+            nombre: product.nombre,
+            stock: Number(variant.stockByBranch?.[originId] || 0),
+          })),
+      ).filter((variant) => {
+        const needle = search.trim().toLowerCase();
+        return !needle || variant.sku.toLowerCase().includes(needle) || variant.nombre.toLowerCase().includes(needle);
+      })
+    : [];
   const visibleTransfers = transfers.filter((transfer) => filter === "all" || transfer.estado === filter);
+
+  const replaceTransfer = (document) => {
+    setTransfers((rows) => rows.some((row) => row.id === document.id)
+      ? rows.map((row) => row.id === document.id ? document : row)
+      : [document, ...rows]);
+  };
+  const closeCreate = () => {
+    setCreateOpen(false);
+    setOriginId("");
+    setDestinationId("");
+    setSearch("");
+    setSelectedLines([]);
+  };
+  const toggleVariant = (variant) => {
+    setSelectedLines((rows) => rows.some((row) => row.variantId === variant.variantId)
+      ? rows.filter((row) => row.variantId !== variant.variantId)
+      : [...rows, { ...variant, quantity: 1 }]);
+  };
+  const setTransferQuantity = (variantId, value) => {
+    setSelectedLines((rows) => rows.map((row) => row.variantId === variantId
+      ? { ...row, quantity: clampInteger(value, 1, row.stock) }
+      : row));
+  };
+  const createDocument = async () => {
+    if (!originId || !destinationId || selectedLines.length === 0) return;
+    setMutation("create");
+    setError("");
+    try {
+      const document = await actions.createTransfer({
+        origin_branch_id: originId,
+        destination_branch_id: destinationId,
+        lines: selectedLines.map((line) => ({
+          variant_id: line.variantId,
+          shipped_quantity: line.quantity,
+        })),
+      });
+      replaceTransfer(document);
+      closeCreate();
+    } catch (requestError) {
+      setError(requestError.message || "No se pudo crear el traspaso.");
+    } finally {
+      setMutation("");
+    }
+  };
+  const sendDocument = async (transferId) => {
+    setMutation(`send:${transferId}`);
+    setError("");
+    const key = sendKeys.current.get(transferId) || crypto.randomUUID();
+    sendKeys.current.set(transferId, key);
+    try {
+      const detail = await actions.getTransferDetail(transferId);
+      const document = await actions.sendTransfer(detail.id, {}, key);
+      sendKeys.current.delete(transferId);
+      replaceTransfer(document);
+    } catch (requestError) {
+      if (requestError.status >= 400 && requestError.status < 500) sendKeys.current.delete(transferId);
+      setError(requestError.message || "No se pudo enviar el traspaso.");
+    } finally {
+      setMutation("");
+    }
+  };
+  const openReception = async (transferId) => {
+    setMutation(`detail:${transferId}`);
+    setError("");
+    try {
+      const detail = await actions.getTransferDetail(transferId);
+      const defaultLines = detail.productos.map((line) => ({
+        variantId: line.variantId,
+        sku: line.sku,
+        nombre: line.nombre,
+        shipped: Number(line.cantidad),
+        received: Number(line.cantidad),
+      }));
+      const preservedLines = receiveKeys.current.has(detail.id)
+        ? receiveDrafts.current.get(detail.id)
+        : null;
+      setReceiveDocument(detail);
+      setReceiveLines(preservedLines || defaultLines);
+    } catch (requestError) {
+      setError(requestError.message || "No se pudo cargar el traspaso.");
+    } finally {
+      setMutation("");
+    }
+  };
+  const setReceivedQuantity = (variantId, value) => {
+    if (receiveDocument) receiveKeys.current.delete(receiveDocument.id);
+    setReceiveLines((rows) => {
+      const nextRows = rows.map((row) => row.variantId === variantId
+        ? { ...row, received: clampInteger(value, 0, row.shipped) }
+        : row);
+      if (receiveDocument) receiveDrafts.current.set(receiveDocument.id, nextRows);
+      return nextRows;
+    });
+  };
+  const submitReception = async () => {
+    if (!receiveDocument) return;
+    setMutation(`receive:${receiveDocument.id}`);
+    setError("");
+    const key = receiveKeys.current.get(receiveDocument.id) || crypto.randomUUID();
+    receiveKeys.current.set(receiveDocument.id, key);
+    receiveDrafts.current.set(receiveDocument.id, receiveLines);
+    try {
+      const document = await actions.receiveTransfer(
+        receiveDocument.id,
+        {
+          lines: receiveLines.map((line) => ({
+            variant_id: line.variantId,
+            received_quantity: line.received,
+          })),
+        },
+        key,
+      );
+      receiveKeys.current.delete(receiveDocument.id);
+      receiveDrafts.current.delete(receiveDocument.id);
+      replaceTransfer(document);
+      setReceiveDocument(null);
+      setReceiveLines([]);
+    } catch (requestError) {
+      if (requestError.status >= 400 && requestError.status < 500) {
+        receiveKeys.current.delete(receiveDocument.id);
+        receiveDrafts.current.delete(receiveDocument.id);
+      }
+      setError(requestError.message || "No se pudo recibir el traspaso.");
+    } finally {
+      setMutation("");
+    }
+  };
 
   const summary = (label, value, color) => h("div", { className: "card", style: { padding: 20 } },
     h("div", { style: { fontSize: 12, color: "var(--muted)", marginBottom: 8 } }, label),
@@ -9256,9 +9414,12 @@ function TransfersView({ currentUser, actions = {} }) {
 
   return h(
     MainLayout,
-    { title: "Traspasos entre Sucursales" },
+    {
+      title: "Traspasos entre Sucursales",
+      actions: h("button", { className: "btn-primary", disabled: mutation !== "", onClick: () => setCreateOpen(true) }, h(Icons.Plus), " Nuevo Traspaso"),
+    },
     error && h("div", { className: "card", style: { padding: 16, marginBottom: 16, color: "var(--danger)" } },
-      error, " ", h("button", { className: "btn-ghost", onClick: loadTransfers, disabled: loading }, "Reintentar")),
+      error, " ", h("button", { className: "btn-ghost", onClick: loadTransfers, disabled: loading }, "Reintentar historial")),
     h("div", { style: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 } },
       summary("Pendientes", transfers.filter((row) => row.estado === "pendiente").length, "var(--warning)"),
       summary("En Tránsito", transfers.filter((row) => row.estado === "en_transito").length, "var(--gold)"),
@@ -9278,7 +9439,7 @@ function TransfersView({ currentUser, actions = {} }) {
         : visibleTransfers.length === 0
           ? h("div", { style: { padding: 32, textAlign: "center", color: "var(--muted)" } }, "No hay traspasos para este filtro.")
           : h("table", null,
-              h("thead", null, h("tr", null, h("th", null, "Folio"), h("th", null, "Productos"), h("th", null, "Origen → Destino"), h("th", null, "Estado"), h("th", null, "Fecha"))),
+              h("thead", null, h("tr", null, h("th", null, "Folio"), h("th", null, "Productos"), h("th", null, "Origen → Destino"), h("th", null, "Estado"), h("th", null, "Fecha"), h("th"))),
               h("tbody", null, visibleTransfers.map((transfer) => {
                 const meta = statusMeta[transfer.estado] || statusMeta.pendiente;
                 return h("tr", { key: transfer.id },
@@ -9289,9 +9450,38 @@ function TransfersView({ currentUser, actions = {} }) {
                   h("td", null, h("span", { className: "pill pill-muted" }, transfer.originBranchCode || transfer.origenId), " → ", h("span", { className: "pill pill-muted" }, transfer.destinationBranchCode || transfer.destinoId)),
                   h("td", null, h("span", { className: `pill pill-${meta.color}` }, meta.label)),
                   h("td", { className: "tabular", style: { color: "var(--muted)", fontSize: 12 } }, transfer.fecha),
+                  h("td", null,
+                    transfer.estado === "pendiente" && h("button", { className: "btn-primary", disabled: mutation !== "", onClick: () => sendDocument(transfer.id) }, mutation === `send:${transfer.id}` ? "Enviando…" : "Enviar"),
+                    transfer.estado === "en_transito" && h("button", { className: "btn-primary", disabled: mutation !== "", onClick: () => openReception(transfer.id) }, mutation === `detail:${transfer.id}` ? "Cargando…" : "Recibir")),
                 );
               }))),
     ),
+    createOpen && h("div", { style: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 } },
+      h("div", { className: "card", style: { width: 900, maxHeight: "90vh", overflow: "auto", padding: 24 } },
+        h("div", { style: { display: "flex", justifyContent: "space-between", marginBottom: 20 } }, h("h3", null, "Nuevo Traspaso"), h("button", { className: "btn-ghost", onClick: closeCreate, disabled: mutation !== "" }, h(Icons.Close))),
+        h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 } },
+          h("label", null, "Sucursal Origen *", h("select", { value: originId, onChange: (event) => { setOriginId(event.target.value); setSelectedLines([]); }, style: { width: "100%", display: "block", marginTop: 6 } }, h("option", { value: "" }, "Seleccionar…"), sucursales.filter((branch) => branch.uuid !== destinationId).map((branch) => h("option", { key: branch.uuid, value: branch.uuid }, `${branch.nombre} (${branch.id})`)))),
+          h("label", null, "Sucursal Destino *", h("select", { value: destinationId, onChange: (event) => setDestinationId(event.target.value), style: { width: "100%", display: "block", marginTop: 6 } }, h("option", { value: "" }, "Seleccionar…"), sucursales.filter((branch) => branch.uuid !== originId).map((branch) => h("option", { key: branch.uuid, value: branch.uuid }, `${branch.nombre} (${branch.id})`)))),
+        ),
+        originId && h(React.Fragment, null,
+          h("input", { value: search, onChange: (event) => setSearch(event.target.value), placeholder: "Buscar por nombre o SKU…", style: { width: "100%", marginBottom: 12 } }),
+          h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 } },
+            h("div", { style: { border: "1px solid var(--border)", borderRadius: 6, maxHeight: 320, overflow: "auto" } }, availableVariants.length === 0
+              ? h("div", { style: { padding: 24, color: "var(--muted)" } }, "No hay variantes con stock en la sucursal de origen.")
+              : availableVariants.map((variant) => h("button", { key: variant.variantId, className: "btn-ghost", onClick: () => toggleVariant(variant), style: { width: "100%", display: "flex", justifyContent: "space-between", textAlign: "left", padding: 10 } }, h("span", null, variant.nombre, " ", h("span", { className: "mono" }, variant.sku)), h("span", null, variant.stock)))),
+            h("div", null, selectedLines.length === 0
+              ? h("div", { style: { padding: 24, color: "var(--muted)" } }, "Selecciona variantes de la lista.")
+              : selectedLines.map((line) => h("div", { key: line.variantId, style: { display: "flex", gap: 8, alignItems: "center", marginBottom: 8 } }, h("span", { style: { flex: 1 } }, line.nombre, " ", h("span", { className: "mono" }, line.sku)), h("input", { type: "number", min: 1, max: line.stock, step: 1, value: line.quantity, onChange: (event) => setTransferQuantity(line.variantId, event.target.value), style: { width: 70 } }), h("button", { className: "btn-ghost", onClick: () => toggleVariant(line) }, h(Icons.Trash))))),
+          )),
+        h("div", { style: { display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 20 } }, h("button", { className: "btn-secondary", onClick: closeCreate, disabled: mutation !== "" }, "Cancelar"), h("button", { className: "btn-primary", onClick: createDocument, disabled: mutation !== "" || !originId || !destinationId || selectedLines.length === 0 }, mutation === "create" ? "Creando…" : "Crear Traspaso")),
+      )),
+    receiveDocument && h("div", { style: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 } },
+      h("div", { className: "card", style: { width: 620, padding: 24 } },
+        h("h3", { style: { marginBottom: 16 } }, `Recibir ${receiveDocument.folio}`),
+        h("p", { style: { color: "var(--muted)", marginBottom: 16 } }, "Confirma la cantidad recibida de cada línea. Puede ser de cero hasta la cantidad enviada."),
+        receiveLines.map((line) => h("div", { key: line.variantId, style: { display: "grid", gridTemplateColumns: "1fr 120px", gap: 12, alignItems: "center", marginBottom: 10 } }, h("span", null, line.nombre, " ", h("span", { className: "mono" }, line.sku), ` · enviadas ${line.shipped}`), h("input", { type: "number", min: 0, max: line.shipped, step: 1, value: line.received, onChange: (event) => setReceivedQuantity(line.variantId, event.target.value) }))),
+        h("div", { style: { display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 20 } }, h("button", { className: "btn-secondary", disabled: mutation !== "", onClick: () => { setReceiveDocument(null); setReceiveLines([]); } }, "Cerrar"), h("button", { className: "btn-primary", disabled: mutation !== "", onClick: submitReception }, mutation === `receive:${receiveDocument.id}` ? "Recibiendo…" : "Confirmar recepción")),
+      )),
   );
 }
 function CreditsView({ clientes = [], sucursales = [], currentUser, actions = {} }) {

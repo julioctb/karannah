@@ -6,7 +6,7 @@
 - Route: organic development (ODD), delegated direct implementation
 - Repository branch at creation: `main`
 - Active feature branch: `feature/phase-5-transfers-counts`
-- Next task: `F5-05A2`
+- Next task: `F5-05B`
 - Delivery strategy: `ask-on-risk`
 - Chain strategy: `stacked-to-main`, selected by the user
 - Engram mirror: active
@@ -256,11 +256,11 @@ Transfers and physical counts currently exist only as isolated frontend demo sta
 ### F5-05 — Replace transfer and count demo screens
 
 - [x] F5-05A1: replace the local transfer demo dataset with API-backed transfer list/history display.
-- [ ] F5-05A2: add persisted transfer create, send, and receive flows.
+- [x] F5-05A2: add persisted transfer create, send, and receive flows.
 - [ ] F5-05B: replace local physical-count demo data/state with start, capture, and finalize flows.
 - [x] Preserve loading, empty, error, retry, filter, summary, and permission-aware states for transfer history.
 - [x] Keep mapped API transfer documents as the transfer screen's sole operational data source.
-- [x] Document transfer history as API-backed while transfer mutations and physical counts remain pending/demo-backed.
+- [x] Document transfer history and mutations as API-backed while physical counts remain pending/demo-backed.
 - Route: delegated writer.
 - Trigger evidence: non-trivial UI/API integration across multiple files.
 - Candidate split:
@@ -274,7 +274,15 @@ Transfers and physical counts currently exist only as isolated frontend demo sta
 - Evidence:
   - F5-05A1 loads transfer history screen-locally through `actions.getTransfers()`, exposes loading, retryable error, empty/filter, summary, and permission-aware states, and renders mapped API documents.
   - The old inline hardcoded transfer dataset is no longer the operational data source.
-  - Transfer create, send, and receive UI and idempotency-key state are intentionally deferred to F5-05A2.
+  - F5-05A2 adds persisted create, send, and receive controls on top of the F5-05A1 history screen.
+  - Creation selects active real variants from the selected origin branch using UUID branch identities and per-variant `stockByBranch`, then submits `origin_branch_id`, `destination_branch_id`, and explicit `variant_id`/`shipped_quantity` lines.
+  - Send loads persisted transfer detail before calling `actions.sendTransfer`; receive loads detail, defaults every received quantity to its shipped quantity, bounds each value from zero through shipped, and submits every line explicitly.
+  - Screen-owned send/receive idempotency keys survive network and 5xx failures, and rotate after success or 4xx validation/conflict responses. Changing a receive payload also rotates its key.
+  - Unsupported transfer cancellation remains absent.
+  - F5-05A2 ordinary verification: `cd frontend && npm run build` passed with the existing invalid `/* @__PURE__ */` annotation warning at `src/screens/index.jsx:4477`; `git diff --check -- frontend/src/screens/index.jsx frontend/README.md odd/tasks/phase-5-transfers-physical-counts.md` passed; minimal numstat was 5/5 for README, 194/4 for `screens/index.jsx`, and 14/6 for this document.
+  - Native review evidence for the final F5-05A2 target is reported in the session output so the evidence note does not change the reviewed candidate identity after acknowledgement.
+  - Non-blocking native-review advisories, if any, are informational only.
+  - Strict TDD RED/GREEN is not applicable to F5-05A2 because no frontend test runner is configured; ordinary build validation is used.
   - The physical-count screen remains in its original demo implementation for F5-05B.
   - The earlier combined F5-05 review attempt failed pre-authority with `lens_context_budget_exceeded`.
   - Lineage `review-573b...` approved an earlier transfer candidate, but that approval does not represent the current target because evidence edits changed the candidate afterward.
@@ -329,10 +337,11 @@ Transfers and physical counts currently exist only as isolated frontend demo sta
 - `F5-02` transfer workflows are implemented, independently verified, and committed as `1c9e7c5 feat(inventory): implement transfer workflows`.
 - `F5-03` snapshot-based physical-count workflows are implemented, independently verified, and committed as `f5d38a1 feat(inventory): implement physical count workflows`; native review escalated without approval.
 - `F5-04` frontend API integration is implemented, verified by build, natively reviewed, acknowledged, and committed.
-- `F5-05A1` reduces the current transfer candidate to API-backed read-only history, verified by build, natively reviewed, acknowledged, and committed. Transfer mutations remain pending as `F5-05A2`, and physical-count replacement remains pending as `F5-05B`.
+- `F5-05A1` reduced the transfer candidate to API-backed read-only history and was committed as `080390f feat(frontend): load transfer history from API`.
+- `F5-05A2` adds API-backed transfer create, send, and receive workflows, verified by the frontend build and scoped diff checks; no commit was created per user instruction. Physical-count replacement remains pending as `F5-05B`.
 - The user-level subagent routing blocker was resolved with explicit authorization.
 - Running authored line count: approximately 473 for F5-01A plus 397 for F5-01B, excluding ODD task-document-only changes.
 
 ## Next step
 
-Implement transfer mutations as `F5-05A2`; keep physical-count replacement deferred to `F5-05B`.
+Implement `F5-05B` to replace the physical-count demo screen with its API-backed workflow.
