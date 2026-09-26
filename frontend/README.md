@@ -21,12 +21,12 @@ npm run build     # producción en dist/ (base relativa "./")
 npm run preview   # sirve dist/ localmente
 ```
 
-El frontend usa FastAPI para autenticación local, catálogo, inventario, clientes,
-ventas, caja, POS y créditos. Catálogo, inventario, clientes, POS y créditos
-incluyen las escrituras disponibles en la API; ventas y reparaciones operativas
-siguen siendo de consulta. Traspasos, conteos, promociones, reportes y
-configuración conservan datos demo aislados hasta sus fases correspondientes.
-Supabase se incorporará en la Fase 9 y se usará solo para Auth.
+The frontend uses FastAPI for local authentication, catalog, inventory, clients,
+sales, cash management, POS, credits, and transfer history. In the current Phase 5
+slice, the transfer screen provides an API-backed read-only list; transfer create,
+send, and receive controls remain pending. Physical counts, promotions, reports,
+and configuration retain isolated demo data until their corresponding slices.
+Supabase will be introduced in Phase 9 and used only for authentication.
 
 Si npm falla con `EACCES` en la caché global, usa una caché temporal:
 
