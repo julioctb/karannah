@@ -6,7 +6,7 @@
 - Route: organic development (ODD), delegated direct implementation
 - Repository branch at creation: `main`
 - Active feature branch: `feature/phase-5-transfers-counts`
-- Next task: `F5-05B`
+- Next task: `F5-06`
 - Delivery strategy: `ask-on-risk`
 - Chain strategy: `stacked-to-main`, selected by the user
 - Engram mirror: active
@@ -257,10 +257,10 @@ Transfers and physical counts currently exist only as isolated frontend demo sta
 
 - [x] F5-05A1: replace the local transfer demo dataset with API-backed transfer list/history display.
 - [x] F5-05A2: add persisted transfer create, send, and receive flows.
-- [ ] F5-05B: replace local physical-count demo data/state with start, capture, and finalize flows.
-- [x] Preserve loading, empty, error, retry, filter, summary, and permission-aware states for transfer history.
-- [x] Keep mapped API transfer documents as the transfer screen's sole operational data source.
-- [x] Document transfer history and mutations as API-backed while physical counts remain pending/demo-backed.
+- [x] F5-05B: replace local physical-count demo data/state with persisted start, capture/save, resume, and finalize flows.
+- [x] Preserve loading, empty, error, retry, filter, summary/progress, disabled-mutation, and permission-aware states across transfer and count workflows.
+- [x] Keep mapped API transfer and physical-count documents as each screen's sole operational data source.
+- [x] Document transfer and physical-count workflows as API-backed.
 - Route: delegated writer.
 - Trigger evidence: non-trivial UI/API integration across multiple files.
 - Candidate split:
@@ -292,6 +292,17 @@ Transfers and physical counts currently exist only as isolated frontend demo sta
   - Non-blocking review advisories: transfer loader readiness and unmapped transfer status were informational only.
   - Work-unit commit was created as `a2b98d8 feat(frontend): load transfer history from API`, then amended only to add this evidence note; the final amended identity is reported in the session output because a commit cannot contain its own final hash.
   - Strict TDD RED/GREEN is not claimed for this scope reduction because the frontend has no configured test runner; ordinary build validation is used.
+  - F5-05B removes the inline completed-count demo history and synthetic local count creation; the screen now loads persisted count documents through `actions.getPhysicalCounts` and resumes open snapshots through `actions.getPhysicalCountDetail`.
+  - Starting a count submits a real branch UUID through `actions.createPhysicalCount`; the active UI is derived entirely from returned `count.lineas`, preserving `contado: null` as not yet observed.
+  - SKU scans increment observations, manual edits preserve nullable pending values, and explicit save submits all non-null lines as `variant_id`/`observed_quantity` through `actions.updatePhysicalCountLines`.
+  - Finalization remains disabled until every observation is non-null and the current draft has been saved. `actions.finalizePhysicalCount` uses a screen-owned idempotency key that survives network/5xx uncertainty and rotates after success or 4xx validation/conflict errors.
+  - Count history preserves loading, retryable error, empty/filter, progress summary, disabled mutation, and non-admin/non-manager permission states. The only exit from an active count is local navigation back to history; no unsupported server cancel/delete operation is exposed.
+  - Frontend README now identifies both transfer and physical-count screens as persisted API-backed workflows.
+  - F5-05B strict TDD RED/GREEN is not applicable because no frontend test runner is configured; ordinary frontend build validation is used.
+  - F5-05B verification: `cd frontend && npm run build` passed with 22 modules transformed and the pre-existing invalid `/* @__PURE__ */` annotation warning at `src/screens/index.jsx:4478`; `git diff --check -- frontend/src/screens/index.jsx frontend/README.md odd/tasks/phase-5-transfers-physical-counts.md` passed; minimal numstat was 5/5 for README, 618/686 for `screens/index.jsx`, and 16/7 for this document.
+  - Native review lineage `review-f0b6da03feca4b56` approved F5-05B and was acknowledged; authority burned with evidence `gentle-ai.review-acknowledged/v1` for target `sha256:d9df860698ea61dc54fa0867c3476a9fdb1b4739359fd236b77414c9f5cae67d`.
+  - Non-blocking review advisories: auth transition not loaded, cleared observations noop, dirty navigation data loss, and workflow coverage were informational only.
+  - Work-unit commit was created as `8da007b feat(frontend): add physical count workflow`, then amended only to add this evidence note; the final amended identity is reported in the session output because a commit cannot contain its own final hash.
 
 ### F5-06 — Close Phase 5 with integrated verification
 
@@ -338,10 +349,11 @@ Transfers and physical counts currently exist only as isolated frontend demo sta
 - `F5-03` snapshot-based physical-count workflows are implemented, independently verified, and committed as `f5d38a1 feat(inventory): implement physical count workflows`; native review escalated without approval.
 - `F5-04` frontend API integration is implemented, verified by build, natively reviewed, acknowledged, and committed.
 - `F5-05A1` reduced the transfer candidate to API-backed read-only history and was committed as `080390f feat(frontend): load transfer history from API`.
-- `F5-05A2` adds API-backed transfer create, send, and receive workflows, verified by the frontend build and scoped diff checks; no commit was created per user instruction. Physical-count replacement remains pending as `F5-05B`.
+- `F5-05A2` adds API-backed transfer create, send, and receive workflows and was committed as `603898d feat(frontend): add transfer mutation flows`.
+- `F5-05B` replaces the physical-count demo with persisted start, capture/save, resume, and finalize workflows; ordinary verification is recorded in the F5-05 evidence.
 - The user-level subagent routing blocker was resolved with explicit authorization.
 - Running authored line count: approximately 473 for F5-01A plus 397 for F5-01B, excluding ODD task-document-only changes.
 
 ## Next step
 
-Implement `F5-05B` to replace the physical-count demo screen with its API-backed workflow.
+Run `F5-06` integrated Phase 5 verification and closeout.

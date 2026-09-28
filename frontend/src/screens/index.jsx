@@ -12371,594 +12371,562 @@ function CategoriesView({
     }),
   );
 }
-function PhysicalCountView() {
-  const [e, t] = useState([
-      {
-        id: 1,
-        folio: "CF-001",
-        fecha: "2026-08-10",
-        sucursal: "T01",
-        estado: "completado",
-        totalEsperado: 245,
-        totalContado: 243,
-        diferencia: -2,
-        responsable: "Ana Garcia",
-      },
-      {
-        id: 2,
-        folio: "CF-002",
-        fecha: "2026-08-05",
-        sucursal: "T02",
-        estado: "completado",
-        totalEsperado: 312,
-        totalContado: 310,
-        diferencia: -2,
-        responsable: "Carlos Lopez",
-      },
-    ]),
-    [a, l] = useState(!1),
-    [n, r] = useState(null),
-    [o, c] = useState(""),
-    [i, s] = useState([]),
-    [m, d] = useState(""),
-    u = (e) => SUCURSALES.find((t) => t.id === e)?.nombre || e,
-    p = () => {
-      if (!o.trim()) return;
-      const e =
-        ((t = o.trim()),
-        PRODUCTOS.find((e) => e.sku.toLowerCase() === t.toLowerCase()));
-      var t;
-      if (!e) return (alert("Producto no encontrado: " + o), void c(""));
-      const a = i.find((t) => t.sku === e.sku);
-      (s(
-        a
-          ? i.map((t) =>
-              t.sku === e.sku ? { ...t, contado: t.contado + 1 } : t,
-            )
-          : [
-              ...i,
-              {
-                sku: e.sku,
-                nombre: e.nombre,
-                categoria: e.categoria,
-                esperado: e.stock,
-                contado: 1,
-              },
-            ],
-      ),
-        c(""));
-    },
-    g = i.filter((e) => e.contado !== e.esperado),
-    y = i.reduce((e, t) => e + t.contado, 0),
-    R = i.reduce((e, t) => e + t.esperado, 0);
-  return React.createElement(
-    MainLayout,
-    {
-      title: "Conteo Fisico de Inventario",
-      actions:
-        !n &&
-        React.createElement(
-          "button",
-          {
-            "data-od-id": "new-physical-count-cta",
-            className: "btn-primary",
-            onClick: () => l(!0),
-            style: {
-              minHeight: 44,
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-            },
-          },
-          React.createElement(Icons.Plus, null),
-          " Nuevo Conteo",
-        ),
-    },
-    n
-      ? React.createElement(
-          "div",
-          null,
-          React.createElement(
-            "div",
-            { className: "card", style: { padding: 20, marginBottom: 20 } },
-            React.createElement(
-              "div",
-              {
-                style: {
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                },
-              },
-              React.createElement(
-                "div",
-                null,
-                React.createElement(
-                  "div",
-                  { style: { display: "flex", alignItems: "center", gap: 12 } },
-                  React.createElement(
-                    "span",
-                    {
-                      className: "mono",
-                      style: {
-                        fontSize: 18,
-                        color: "var(--accent)",
-                        fontWeight: 600,
-                      },
-                    },
-                    n.folio,
-                  ),
-                  React.createElement(
-                    "span",
-                    { className: "pill pill-warning" },
-                    "En proceso",
-                  ),
-                ),
-                React.createElement(
-                  "div",
-                  {
-                    style: {
-                      fontSize: 13,
-                      color: "var(--muted)",
-                      marginTop: 4,
-                    },
-                  },
-                  u(n.sucursal),
-                  " - ",
-                  n.fecha,
-                ),
-              ),
-              React.createElement(
-                "div",
-                { style: { display: "flex", gap: 8 } },
-                React.createElement(
-                  "button",
-                  {
-                    className: "btn-ghost",
-                    onClick: () => {
-                      (r(null), s([]));
-                    },
-                    style: { color: "var(--danger)" },
-                  },
-                  "Cancelar",
-                ),
-                React.createElement(
-                  "button",
-                  {
-                    className: "btn-primary",
-                    onClick: () => {
-                      const a = i.reduce((e, t) => e + t.contado, 0),
-                        l = i.reduce((e, t) => e + t.esperado, 0),
-                        o = {
-                          ...n,
-                          estado: "completado",
-                          totalContado: a,
-                          totalEsperado: l,
-                          diferencia: a - l,
-                        };
-                      (t([o, ...e]), r(null), s([]));
-                    },
-                    disabled: 0 === i.length,
-                  },
-                  "Finalizar Conteo",
-                ),
-              ),
-            ),
-          ),
-          React.createElement(
-            "div",
-            { className: "card", style: { padding: 20, marginBottom: 20 } },
-            React.createElement(
-              "div",
-              { style: { display: "flex", gap: 12, alignItems: "flex-end" } },
-              React.createElement(
-                "div",
-                { style: { flex: 1 } },
-                React.createElement(
-                  "label",
-                  {
-                    style: {
-                      display: "block",
-                      fontSize: 12,
-                      fontWeight: 500,
-                      marginBottom: 6,
-                      color: "var(--muted)",
-                    },
-                  },
-                  "Escanear o escribir SKU",
-                ),
-                React.createElement(
-                  "div",
-                  { style: { position: "relative" } },
-                  React.createElement("input", {
-                    type: "text",
-                    value: o,
-                    onChange: (e) => c(e.target.value.toUpperCase()),
-                    onKeyDown: (e) => "Enter" === e.key && p(),
-                    placeholder: "Escanea codigo de barras o escribe SKU...",
-                    style: { width: "100%", paddingRight: 40 },
-                    autoFocus: !0,
-                  }),
-                  React.createElement(
-                    "span",
-                    {
-                      style: {
-                        position: "absolute",
-                        right: 12,
-                        top: "50%",
-                        transform: "translateY(-50%)",
-                        opacity: 0.3,
-                      },
-                    },
-                    React.createElement(Icons.Barcode, null),
-                  ),
-                ),
-              ),
-              React.createElement(
-                "button",
-                { className: "btn-primary", onClick: p },
-                "Agregar",
-              ),
-            ),
-          ),
-          React.createElement(
-            "div",
-            {
-              style: {
-                display: "grid",
-                gridTemplateColumns: "repeat(4, 1fr)",
-                gap: 12,
-                marginBottom: 20,
-              },
-            },
-            React.createElement(
-              "div",
-              { className: "card", style: { padding: 16 } },
-              React.createElement(
-                "div",
-                { style: { fontSize: 12, color: "var(--muted)" } },
-                "Items escaneados",
-              ),
-              React.createElement(
-                "div",
-                { style: { fontSize: 24, fontWeight: 600 } },
-                i.length,
-              ),
-            ),
-            React.createElement(
-              "div",
-              { className: "card", style: { padding: 16 } },
-              React.createElement(
-                "div",
-                { style: { fontSize: 12, color: "var(--muted)" } },
-                "Total contado",
-              ),
-              React.createElement(
-                "div",
-                { style: { fontSize: 24, fontWeight: 600 } },
-                y,
-              ),
-            ),
-            React.createElement(
-              "div",
-              { className: "card", style: { padding: 16 } },
-              React.createElement(
-                "div",
-                { style: { fontSize: 12, color: "var(--muted)" } },
-                "Total esperado",
-              ),
-              React.createElement(
-                "div",
-                { style: { fontSize: 24, fontWeight: 600 } },
-                R,
-              ),
-            ),
-            React.createElement(
-              "div",
-              {
-                className: "card",
-                style: {
-                  padding: 16,
-                  background:
-                    g.length > 0 ? "var(--warning-bg)" : "var(--success-bg)",
-                },
-              },
-              React.createElement(
-                "div",
-                { style: { fontSize: 12, color: "var(--muted)" } },
-                "Con diferencias",
-              ),
-              React.createElement(
-                "div",
-                { style: { fontSize: 24, fontWeight: 600 } },
-                g.length,
-              ),
-            ),
-          ),
-          React.createElement(
-            "div",
-            { className: "card", style: { padding: 0 } },
-            React.createElement(
-              "table",
-              { className: "data-table" },
-              React.createElement(
-                "thead",
-                null,
-                React.createElement(
-                  "tr",
-                  null,
-                  React.createElement("th", null, "SKU"),
-                  React.createElement("th", null, "Producto"),
-                  React.createElement("th", null, "Categoria"),
-                  React.createElement(
-                    "th",
-                    { style: { textAlign: "center" } },
-                    "Esperado",
-                  ),
-                  React.createElement(
-                    "th",
-                    { style: { textAlign: "center" } },
-                    "Contado",
-                  ),
-                  React.createElement(
-                    "th",
-                    { style: { textAlign: "center" } },
-                    "Diferencia",
-                  ),
-                  React.createElement("th", null),
-                ),
-              ),
-              React.createElement(
-                "tbody",
-                null,
-                0 === i.length
-                  ? React.createElement(
-                      "tr",
-                      null,
-                      React.createElement(
-                        "td",
-                        {
-                          colSpan: "7",
-                          style: {
-                            textAlign: "center",
-                            padding: 40,
-                            color: "var(--muted)",
-                          },
-                        },
-                        React.createElement(
-                          "span",
-                          {
-                            style: {
-                              opacity: 0.3,
-                              marginBottom: 8,
-                              display: "block",
-                            },
-                          },
-                          React.createElement(Icons.Barcode, null),
-                        ),
-                        React.createElement(
-                          "div",
-                          null,
-                          "Escanea o escribe un SKU para comenzar el conteo",
-                        ),
-                      ),
-                    )
-                  : i.map((e) => {
-                      const t = e.contado - e.esperado;
-                      return React.createElement(
-                        "tr",
-                        { key: e.sku },
-                        React.createElement(
-                          "td",
-                          {
-                            className: "mono",
-                            style: { color: "var(--accent)" },
-                          },
-                          e.sku,
-                        ),
-                        React.createElement("td", null, e.nombre),
-                        React.createElement(
-                          "td",
-                          null,
-                          React.createElement(
-                            "span",
-                            {
-                              className:
-                                "pill " +
-                                ("joyeria" ===
-                                ((a = e.categoria),
-                                CATEGORIAS.find((e) => e.clave === a)?.grupo)
-                                  ? "pill-gold"
-                                  : "pill-accent"),
-                            },
-                            e.categoria,
-                          ),
-                          React.createElement(
-                            "span",
-                            { style: { marginLeft: 6, fontSize: 12 } },
-                            ((e) =>
-                              CATEGORIAS.find((t) => t.clave === e)?.nombre ||
-                              e)(e.categoria),
-                          ),
-                        ),
-                        React.createElement(
-                          "td",
-                          {
-                            style: { textAlign: "center" },
-                            className: "tabular",
-                          },
-                          e.esperado,
-                        ),
-                        React.createElement(
-                          "td",
-                          { style: { textAlign: "center" } },
-                          React.createElement("input", {
-                            type: "number",
-                            value: e.contado,
-                            onChange: (t) => {
-                              return (
-                                (a = e.sku),
-                                (l = parseInt(t.target.value) || 0),
-                                void s(
-                                  i.map((e) =>
-                                    e.sku === a
-                                      ? { ...e, contado: Math.max(0, l) }
-                                      : e,
-                                  ),
-                                )
-                              );
-                              var a, l;
-                            },
-                            style: { width: 60, textAlign: "center" },
-                            min: "0",
-                          }),
-                        ),
-                        React.createElement(
-                          "td",
-                          { style: { textAlign: "center" } },
-                          React.createElement(
-                            "span",
-                            {
-                              className:
-                                "pill " +
-                                (0 === t
-                                  ? "pill-success"
-                                  : t > 0
-                                    ? "pill-warning"
-                                    : "pill-danger"),
-                            },
-                            t > 0 ? "+" : "",
-                            t,
-                          ),
-                        ),
-                        React.createElement(
-                          "td",
-                          null,
-                          React.createElement(
-                            "button",
-                            {
-                              className: "btn-ghost",
-                              onClick: () => {
-                                return (
-                                  (t = e.sku),
-                                  void s(i.filter((e) => e.sku !== t))
-                                );
-                                var t;
-                              },
-                              style: { color: "var(--danger)" },
-                            },
-                            React.createElement(Icons.Trash, null),
-                          ),
-                        ),
-                      );
-                      var a;
-                    }),
-              ),
-            ),
-          ),
-        )
-      : React.createElement(
-          React.Fragment,
-          null,
-          React.createElement(
-            "div",
-            { className: "card", style: { padding: 0 } },
-            React.createElement(
-              "table",
-              { className: "data-table" },
-              React.createElement(
-                "thead",
-                null,
-                React.createElement(
-                  "tr",
-                  null,
-                  React.createElement("th", null, "Folio"),
-                  React.createElement("th", null, "Fecha"),
-                  React.createElement("th", null, "Sucursal"),
-                  React.createElement("th", null, "Responsable"),
-                  React.createElement(
-                    "th",
-                    { style: { textAlign: "center" } },
-                    "Esperado",
-                  ),
-                  React.createElement(
-                    "th",
-                    { style: { textAlign: "center" } },
-                    "Contado",
-                  ),
-                  React.createElement(
-                    "th",
-                    { style: { textAlign: "center" } },
-                    "Diferencia",
-                  ),
-                  React.createElement("th", null, "Estado"),
-                ),
-              ),
-              React.createElement(
-                "tbody",
-                null,
-                e.map((e) =>
-                  React.createElement(
-                    "tr",
-                    { key: e.id },
-                    React.createElement(
-                      "td",
-                      { className: "mono", style: { color: "var(--accent)" } },
-                      e.folio,
-                    ),
-                    React.createElement("td", null, e.fecha),
-                    React.createElement("td", null, u(e.sucursal)),
-                    React.createElement("td", null, e.responsable),
-                    React.createElement(
-                      "td",
-                      { style: { textAlign: "center" }, className: "tabular" },
-                      e.totalEsperado,
-                    ),
-                    React.createElement(
-                      "td",
-                      { style: { textAlign: "center" }, className: "tabular" },
-                      e.totalContado,
-                    ),
-                    React.createElement(
-                      "td",
-                      { style: { textAlign: "center" } },
-                      React.createElement(
-                        "span",
-                        {
-                          className:
-                            "pill " +
-                            (0 === e.diferencia
-                              ? "pill-success"
-                              : "pill-danger"),
-                        },
-                        e.diferencia > 0 ? "+" : "",
-                        e.diferencia,
-                      ),
-                    ),
-                    React.createElement(
-                      "td",
-                      null,
-                      React.createElement(
-                        "span",
-                        {
-                          className:
-                            "pill pill-" +
-                            ("completado" === e.estado ? "success" : "warning"),
-                        },
-                        e.estado,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-    a &&
+function PhysicalCountView({ sucursales = [], currentUser, actions = {} }) {
+  const authorized = ["admin", "encargado"].includes(currentUser?.rol);
+  const [counts, setCounts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [filter, setFilter] = useState("all");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [branchId, setBranchId] = useState("");
+  const [activeCount, setActiveCount] = useState(null);
+  const [draftLines, setDraftLines] = useState([]);
+  const [scan, setScan] = useState("");
+  const [dirty, setDirty] = useState(false);
+  const [mutation, setMutation] = useState("");
+  const finalizeKeys = React.useRef(new Map());
+
+  const loadCounts = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      setCounts(await actions.getPhysicalCounts());
+    } catch (requestError) {
+      setError(
+        requestError.message || "No se pudo cargar el historial de conteos.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (authorized && typeof actions.getPhysicalCounts === "function") {
+      loadCounts();
+    } else {
+      setLoading(false);
+    }
+  }, []);
+
+  if (!authorized) {
+    return React.createElement(
+      MainLayout,
+      { title: "Conteo Físico de Inventario" },
       React.createElement(
         "div",
-        {
-          style: {
+        { className: "card", style: { padding: 24 } },
+        "No tienes permiso para administrar conteos físicos.",
+      ),
+    );
+  }
+
+  const replaceCount = (document) => {
+    setCounts((rows) =>
+      rows.some((row) => row.id === document.id)
+        ? rows.map((row) => (row.id === document.id ? document : row))
+        : [document, ...rows],
+    );
+  };
+  const enterCount = (document) => {
+    setActiveCount(document);
+    setDraftLines(document.lineas.map((line) => ({ ...line })));
+    setDirty(false);
+    setScan("");
+  };
+  const openCount = async (countId) => {
+    setMutation(`detail:${countId}`);
+    setError("");
+    try {
+      const document = await actions.getPhysicalCountDetail(countId);
+      replaceCount(document);
+      if (document.estado === "en_proceso") enterCount(document);
+    } catch (requestError) {
+      setError(requestError.message || "No se pudo cargar el conteo.");
+    } finally {
+      setMutation("");
+    }
+  };
+  const createCount = async () => {
+    if (!branchId) return;
+    setMutation("create");
+    setError("");
+    try {
+      const document = await actions.createPhysicalCount({ branch_id: branchId });
+      replaceCount(document);
+      enterCount(document);
+      setCreateOpen(false);
+      setBranchId("");
+    } catch (requestError) {
+      setError(requestError.message || "No se pudo iniciar el conteo.");
+    } finally {
+      setMutation("");
+    }
+  };
+  const setObserved = (variantId, value) => {
+    const parsed =
+      value === "" ? null : Math.max(0, Number.parseInt(value, 10) || 0);
+    setDraftLines((rows) =>
+      rows.map((line) =>
+        line.variantId === variantId ? { ...line, contado: parsed } : line,
+      ),
+    );
+    setDirty(true);
+  };
+  const scanSku = () => {
+    const sku = scan.trim().toLowerCase();
+    if (!sku) return;
+    const line = draftLines.find((row) => row.sku.toLowerCase() === sku);
+    if (!line) {
+      setError(`El SKU ${scan.trim()} no forma parte de este conteo.`);
+      setScan("");
+      return;
+    }
+    setObserved(line.variantId, (line.contado ?? 0) + 1);
+    setError("");
+    setScan("");
+  };
+  const saveObservations = async () => {
+    const observed = draftLines.filter((line) => line.contado !== null);
+    if (!activeCount || observed.length === 0) return;
+    setMutation("save");
+    setError("");
+    try {
+      const document = await actions.updatePhysicalCountLines(activeCount.id, {
+        lines: observed.map((line) => ({
+          variant_id: line.variantId,
+          observed_quantity: line.contado,
+        })),
+      });
+      replaceCount(document);
+      enterCount(document);
+    } catch (requestError) {
+      setError(
+        requestError.message || "No se pudieron guardar las observaciones.",
+      );
+    } finally {
+      setMutation("");
+    }
+  };
+  const finalizeCount = async () => {
+    if (!activeCount || dirty || !activeCount.observacionesCompletas) return;
+    setMutation("finalize");
+    setError("");
+    const key = finalizeKeys.current.get(activeCount.id) || crypto.randomUUID();
+    finalizeKeys.current.set(activeCount.id, key);
+    try {
+      const document = await actions.finalizePhysicalCount(
+        activeCount.id,
+        {},
+        key,
+      );
+      finalizeKeys.current.delete(activeCount.id);
+      replaceCount(document);
+      setActiveCount(null);
+      setDraftLines([]);
+    } catch (requestError) {
+      if (requestError.status >= 400 && requestError.status < 500) {
+        finalizeKeys.current.delete(activeCount.id);
+      }
+      setError(requestError.message || "No se pudo finalizar el conteo.");
+    } finally {
+      setMutation("");
+    }
+  };
+
+  const visibleCounts = counts.filter(
+    (count) => filter === "all" || count.estado === filter,
+  );
+  const remaining = draftLines.filter((line) => line.contado === null).length;
+  const totalExpected = draftLines.reduce(
+    (total, line) => total + line.esperado,
+    0,
+  );
+  const totalObserved = draftLines.reduce(
+    (total, line) => total + (line.contado ?? 0),
+    0,
+  );
+  const differences = draftLines.filter(
+    (line) => line.contado !== null && line.contado !== line.esperado,
+  ).length;
+  const canFinalize =
+    mutation === "" &&
+    !dirty &&
+    activeCount?.observacionesCompletas &&
+    draftLines.every((line) => line.contado !== null);
+
+  return (
+    <MainLayout
+      title="Conteo Físico de Inventario"
+      actions={
+        !activeCount && (
+          <button
+            data-od-id="new-physical-count-cta"
+            className="btn-primary"
+            disabled={mutation !== "" || loading}
+            onClick={() => setCreateOpen(true)}
+          >
+            <Icons.Plus /> Nuevo Conteo
+          </button>
+        )
+      }
+    >
+      {error && (
+        <div
+          className="card"
+          style={{ padding: 16, marginBottom: 16, color: "var(--danger)" }}
+        >
+          {error}{" "}
+          {!activeCount && (
+            <button
+              className="btn-ghost"
+              onClick={loadCounts}
+              disabled={loading || mutation !== ""}
+            >
+              Reintentar
+            </button>
+          )}
+        </div>
+      )}
+
+      {activeCount ? (
+        <>
+          <div className="card" style={{ padding: 20, marginBottom: 20 }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <span
+                    className="mono"
+                    style={{
+                      fontSize: 18,
+                      color: "var(--accent)",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {activeCount.folio}
+                  </span>
+                  <span className="pill pill-warning">En proceso</span>
+                </div>
+                <div
+                  style={{ fontSize: 13, color: "var(--muted)", marginTop: 4 }}
+                >
+                  {activeCount.branchName || activeCount.sucursal} ·{" "}
+                  {activeCount.fecha}
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  className="btn-secondary"
+                  disabled={mutation !== ""}
+                  onClick={() => {
+                    setActiveCount(null);
+                    setDraftLines([]);
+                    setDirty(false);
+                    setError("");
+                  }}
+                >
+                  Volver al historial
+                </button>
+                <button
+                  className="btn-primary"
+                  disabled={!canFinalize}
+                  onClick={finalizeCount}
+                >
+                  {mutation === "finalize"
+                    ? "Finalizando…"
+                    : "Finalizar Conteo"}
+                </button>
+              </div>
+            </div>
+            {dirty && (
+              <div
+                style={{ color: "var(--warning)", marginTop: 12, fontSize: 12 }}
+              >
+                Guardá las observaciones antes de finalizar.
+              </div>
+            )}
+          </div>
+
+          <div className="card" style={{ padding: 20, marginBottom: 20 }}>
+            <div style={{ display: "flex", gap: 12, alignItems: "flex-end" }}>
+              <label style={{ flex: 1 }}>
+                Escanear o escribir SKU
+                <input
+                  value={scan}
+                  disabled={mutation !== ""}
+                  onChange={(event) => setScan(event.target.value.toUpperCase())}
+                  onKeyDown={(event) => event.key === "Enter" && scanSku()}
+                  placeholder="Escaneá o escribí un SKU…"
+                  style={{ display: "block", width: "100%", marginTop: 6 }}
+                />
+              </label>
+              <button
+                className="btn-primary"
+                onClick={scanSku}
+                disabled={mutation !== "" || !scan.trim()}
+              >
+                Agregar
+              </button>
+              <button
+                className="btn-secondary"
+                onClick={saveObservations}
+                disabled={mutation !== "" || !dirty}
+              >
+                {mutation === "save" ? "Guardando…" : "Guardar observaciones"}
+              </button>
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(4, 1fr)",
+              gap: 12,
+              marginBottom: 20,
+            }}
+          >
+            {[
+              ["Líneas", draftLines.length],
+              ["Sin observar", remaining],
+              ["Total esperado", totalExpected],
+              ["Con diferencias", differences],
+            ].map(([label, value]) => (
+              <div className="card" key={label} style={{ padding: 16 }}>
+                <div style={{ fontSize: 12, color: "var(--muted)" }}>
+                  {label}
+                </div>
+                <div style={{ fontSize: 24, fontWeight: 600 }}>{value}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="card" style={{ padding: 0 }}>
+            {draftLines.length === 0 ? (
+              <div
+                style={{
+                  padding: 32,
+                  textAlign: "center",
+                  color: "var(--muted)",
+                }}
+              >
+                La sucursal no tiene variantes activas con existencias registradas.
+              </div>
+            ) : (
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>SKU</th>
+                    <th>Producto</th>
+                    <th>Categoría</th>
+                    <th style={{ textAlign: "center" }}>Esperado</th>
+                    <th style={{ textAlign: "center" }}>Contado</th>
+                    <th style={{ textAlign: "center" }}>Diferencia</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {draftLines.map((line) => {
+                    const difference =
+                      line.contado === null
+                        ? null
+                        : line.contado - line.esperado;
+                    return (
+                      <tr key={line.variantId}>
+                        <td
+                          className="mono"
+                          style={{ color: "var(--accent)" }}
+                        >
+                          {line.sku}
+                        </td>
+                        <td>{line.nombre}</td>
+                        <td>{line.categoria || "—"}</td>
+                        <td
+                          className="tabular"
+                          style={{ textAlign: "center" }}
+                        >
+                          {line.esperado}
+                        </td>
+                        <td style={{ textAlign: "center" }}>
+                          <input
+                            type="number"
+                            min="0"
+                            disabled={mutation !== ""}
+                            value={line.contado ?? ""}
+                            placeholder="—"
+                            onChange={(event) =>
+                              setObserved(line.variantId, event.target.value)
+                            }
+                            style={{ width: 72, textAlign: "center" }}
+                          />
+                        </td>
+                        <td style={{ textAlign: "center" }}>
+                          {difference === null ? (
+                            <span className="pill pill-muted">Pendiente</span>
+                          ) : (
+                            <span
+                              className={`pill ${
+                                difference === 0
+                                  ? "pill-success"
+                                  : difference > 0
+                                    ? "pill-warning"
+                                    : "pill-danger"
+                              }`}
+                            >
+                              {difference > 0 ? `+${difference}` : difference}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+          <div style={{ marginTop: 12, color: "var(--muted)", fontSize: 12 }}>
+            Total capturado: {totalObserved}. Restan {remaining} líneas sin observar.
+          </div>
+        </>
+      ) : (
+        <>
+          <div
+            className="card"
+            style={{
+              marginBottom: 16,
+              padding: 16,
+              display: "flex",
+              gap: 8,
+            }}
+          >
+            {["all", "en_proceso", "completado"].map((status) => (
+              <button
+                key={status}
+                className={filter === status ? "btn-primary" : "btn-secondary"}
+                onClick={() => setFilter(status)}
+                disabled={mutation !== ""}
+              >
+                {status === "all"
+                  ? "Todos"
+                  : status === "en_proceso"
+                    ? "En proceso"
+                    : "Completados"}
+              </button>
+            ))}
+          </div>
+          <div className="card" style={{ padding: 0 }}>
+            {loading ? (
+              <div
+                style={{
+                  padding: 32,
+                  textAlign: "center",
+                  color: "var(--muted)",
+                }}
+              >
+                Cargando conteos…
+              </div>
+            ) : visibleCounts.length === 0 ? (
+              <div
+                style={{
+                  padding: 32,
+                  textAlign: "center",
+                  color: "var(--muted)",
+                }}
+              >
+                No hay conteos para este filtro.
+              </div>
+            ) : (
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Folio</th>
+                    <th>Fecha</th>
+                    <th>Sucursal</th>
+                    <th style={{ textAlign: "center" }}>Esperado</th>
+                    <th style={{ textAlign: "center" }}>Contado</th>
+                    <th style={{ textAlign: "center" }}>Diferencia</th>
+                    <th>Estado</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleCounts.map((count) => (
+                    <tr key={count.id}>
+                      <td className="mono" style={{ color: "var(--accent)" }}>
+                        {count.folio}
+                      </td>
+                      <td>{count.fecha}</td>
+                      <td>{count.branchName || count.sucursal}</td>
+                      <td
+                        className="tabular"
+                        style={{ textAlign: "center" }}
+                      >
+                        {count.totalEsperado}
+                      </td>
+                      <td
+                        className="tabular"
+                        style={{ textAlign: "center" }}
+                      >
+                        {count.totalContado ?? "—"}
+                      </td>
+                      <td style={{ textAlign: "center" }}>
+                        {count.diferencia === null ? (
+                          "—"
+                        ) : (
+                          <span
+                            className={`pill ${
+                              count.diferencia === 0
+                                ? "pill-success"
+                                : "pill-danger"
+                            }`}
+                          >
+                            {count.diferencia > 0
+                              ? `+${count.diferencia}`
+                              : count.diferencia}
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        <span
+                          className={`pill pill-${
+                            count.estado === "completado"
+                              ? "success"
+                              : "warning"
+                          }`}
+                        >
+                          {count.estado === "completado"
+                            ? "Completado"
+                            : "En proceso"}
+                        </span>
+                      </td>
+                      <td>
+                        {count.estado === "en_proceso" && (
+                          <button
+                            className="btn-primary"
+                            disabled={mutation !== ""}
+                            onClick={() => openCount(count.id)}
+                          >
+                            {mutation === `detail:${count.id}`
+                              ? "Cargando…"
+                              : "Continuar"}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </>
+      )}
+
+      {createOpen && (
+        <div
+          style={{
             position: "fixed",
             inset: 0,
             background: "rgba(0,0,0,0.5)",
@@ -12966,112 +12934,76 @@ function PhysicalCountView() {
             alignItems: "center",
             justifyContent: "center",
             zIndex: 100,
-          },
-        },
-        React.createElement(
-          "div",
-          { className: "card", style: { width: 400, padding: 0 } },
-          React.createElement(
-            "div",
-            {
-              style: {
-                padding: "16px 24px",
-                borderBottom: "1px solid var(--border)",
+          }}
+        >
+          <div className="card" style={{ width: 420, padding: 24 }}>
+            <div
+              style={{
                 display: "flex",
                 justifyContent: "space-between",
-                alignItems: "center",
-              },
-            },
-            React.createElement(
-              "h3",
-              { style: { fontSize: 16, fontWeight: 600 } },
-              "Nuevo Conteo Fisico",
-            ),
-            React.createElement(
-              "button",
-              { className: "btn-ghost", onClick: () => l(!1) },
-              React.createElement(Icons.Close, null),
-            ),
-          ),
-          React.createElement(
-            "div",
-            { style: { padding: 24 } },
-            React.createElement(
-              "label",
-              {
-                style: {
-                  display: "block",
-                  fontSize: 12,
-                  fontWeight: 500,
-                  marginBottom: 6,
-                  color: "var(--muted)",
-                },
-              },
-              "Sucursal a contar",
-            ),
-            React.createElement(
-              "select",
-              {
-                value: m,
-                onChange: (e) => d(e.target.value),
-                style: { width: "100%" },
-              },
-              React.createElement(
-                "option",
-                { value: "" },
-                "Selecciona sucursal...",
-              ),
-              SUCURSALES.map((e) =>
-                React.createElement(
-                  "option",
-                  { key: e.id, value: e.id },
-                  e.nombre,
-                ),
-              ),
-            ),
-          ),
-          React.createElement(
-            "div",
-            {
-              style: {
-                padding: "16px 24px",
-                borderTop: "1px solid var(--border)",
+                marginBottom: 20,
+              }}
+            >
+              <h3>Nuevo Conteo Físico</h3>
+              <button
+                className="btn-ghost"
+                disabled={mutation !== ""}
+                onClick={() => {
+                  setCreateOpen(false);
+                  setBranchId("");
+                }}
+              >
+                <Icons.Close />
+              </button>
+            </div>
+            <label>
+              Sucursal a contar
+              <select
+                value={branchId}
+                disabled={mutation !== ""}
+                onChange={(event) => setBranchId(event.target.value)}
+                style={{ display: "block", width: "100%", marginTop: 6 }}
+              >
+                <option value="">Seleccioná una sucursal…</option>
+                {sucursales
+                  .filter((branch) => branch.uuid)
+                  .map((branch) => (
+                    <option key={branch.uuid} value={branch.uuid}>
+                      {branch.nombre} ({branch.id})
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <div
+              style={{
                 display: "flex",
                 justifyContent: "flex-end",
                 gap: 8,
-              },
-            },
-            React.createElement(
-              "button",
-              { className: "btn-ghost", onClick: () => l(!1) },
-              "Cancelar",
-            ),
-            React.createElement(
-              "button",
-              {
-                className: "btn-primary",
-                onClick: () => {
-                  if (!m) return;
-                  const t = {
-                    id: e.length + 1,
-                    folio: "CF-" + String(e.length + 1).padStart(3, "0"),
-                    fecha: new Date().toISOString().split("T")[0],
-                    sucursal: m,
-                    estado: "en_proceso",
-                    totalEsperado: 0,
-                    totalContado: 0,
-                    diferencia: 0,
-                    responsable: "Usuario Actual",
-                  };
-                  (r(t), s([]), l(!1));
-                },
-                disabled: !m,
-              },
-              "Iniciar Conteo",
-            ),
-          ),
-        ),
-      ),
+                marginTop: 20,
+              }}
+            >
+              <button
+                className="btn-secondary"
+                disabled={mutation !== ""}
+                onClick={() => {
+                  setCreateOpen(false);
+                  setBranchId("");
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                className="btn-primary"
+                disabled={mutation !== "" || !branchId}
+                onClick={createCount}
+              >
+                {mutation === "create" ? "Iniciando…" : "Iniciar Conteo"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </MainLayout>
   );
 }
 const VENTAS_DEMO = [
