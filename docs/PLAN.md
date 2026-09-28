@@ -163,12 +163,20 @@ PostgreSQL 16 local; la suite contiene 91 pruebas aprobadas.
 migración inicial quedan reservadas para el cierre del desarrollo, según la
 política de esquema definida al inicio de este plan.
 
-### Fase 5 — Traspasos y conteos físicos
-- [ ] Documentos y líneas de traspaso; transferencia atómica origen/destino.
-- [ ] Diferencias de recepción; sin duplicados por reintentos.
-- [ ] Fotografía del inventario al iniciar conteo; fin por ajustes auditados.
+### Fase 5 — Traspasos y conteos físicos ✅
+- [x] Documentos y líneas de traspaso; transferencia atómica origen/destino.
+- [x] Diferencias de recepción; sin duplicados por reintentos.
+- [x] Fotografía del inventario al iniciar conteo; fin por ajustes auditados.
 
 **Criterio de salida:** movimientos conciliables; ningún reintento duplica stock.
+
+**Fase completada:** traspasos y conteos físicos operan mediante documentos
+persistidos y movimientos auditados. Los envíos, recepciones, inicios de conteo
+y finalizaciones son seguros ante reintentos; los conteos conservan una
+fotografía inicial y concilian las existencias observadas contra el saldo
+vigente mediante movimientos `conteo`. Las pantallas de traspasos y conteos
+usan la API como única fuente operativa. La verificación integrada aprobó 136
+pruebas de backend, Ruff y el build de producción del frontend.
 
 ### Fase 6 — Reparaciones
 - [ ] Unificar estados frontend/backend; alta, costo, precio y fechas.

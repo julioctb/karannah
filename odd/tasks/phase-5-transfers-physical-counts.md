@@ -307,10 +307,10 @@ Transfers and physical counts currently exist only as isolated frontend demo sta
 ### F5-06 — Close Phase 5 with integrated verification
 
 - [x] Run all applicable backend and frontend checks.
-- [ ] Confirm retry evidence shows no duplicate stock movements.
-- [ ] Confirm transfer and count documents reconcile to ledger entries and balances.
-- [ ] Confirm no Phase 5 demo dataset remains an operational source of truth.
-- [ ] Update `docs/PLAN.md` and `docs/CHANGELOG.md` only after observed completion evidence.
+- [x] Confirm retry evidence shows no duplicate stock movements.
+- [x] Confirm transfer and count documents reconcile to ledger entries and balances.
+- [x] Confirm no Phase 5 demo dataset remains an operational source of truth.
+- [x] Update `docs/PLAN.md` and `docs/CHANGELOG.md` only after observed completion evidence.
 - Route: delegated verification according to native risk assessment, plus parent structural readback.
 - Trigger evidence: verification commands and cross-layer behavior exceed a local 1–3-file check.
 - Candidate surfaces:
@@ -327,7 +327,10 @@ Transfers and physical counts currently exist only as isolated frontend demo sta
   - Backend correction requires `Idempotency-Key` on count creation, records the request before snapshot/folio allocation, returns the stored count for an identical replay, and returns `409` when the same key is reused with a changed branch payload.
   - Frontend correction threads the key through the API adapter and app action; the count screen preserves it across network/5xx uncertainty, clears it after success or 4xx responses, and rotates it when the selected branch changes.
   - GREEN and integrated checks: focused Phase 5 tests `45 passed in 1.14s`; full backend `136 passed in 4.04s`; Ruff all checks passed; frontend production build passed with the existing invalid `/* @__PURE__ */` annotation warning at `src/screens/index.jsx:4478`.
-  - F5-06 remains open pending independent closeout confirmation of the remaining reconciliation and demo-source checklist items; `docs/PLAN.md` and `docs/CHANGELOG.md` were intentionally not changed.
+  - Count-start idempotency correction was natively reviewed and acknowledged under lineage `review-f3a7e71e1fc68831`; work-unit commit: `badd822 fix(inventory): make physical count starts idempotent`.
+  - Independent post-fix closeout verification verdict: PASS, no findings. Checks: full backend `136 passed in 4.20s`; Ruff all checks passed; frontend build passed with the existing invalid `/* @__PURE__ */` annotation warning at `src/screens/index.jsx:4478`; scoped diff-check passed.
+  - Verifier confirmed transfer send/receive idempotency and reconciliation, physical-count start/finalize idempotency and reconciliation, API-backed transfer/count screens with no operational demo data source, and safe documentation updates.
+  - `docs/PLAN.md` now marks Phase 5 complete and records the persisted, retry-safe transfer/count outcome; `docs/CHANGELOG.md` now includes the Phase 5 closeout entry and verification evidence.
 
 ## Acceptance criteria
 
@@ -356,10 +359,11 @@ Transfers and physical counts currently exist only as isolated frontend demo sta
 - `F5-04` frontend API integration is implemented, verified by build, natively reviewed, acknowledged, and committed.
 - `F5-05A1` reduced the transfer candidate to API-backed read-only history and was committed as `080390f feat(frontend): load transfer history from API`.
 - `F5-05A2` adds API-backed transfer create, send, and receive workflows and was committed as `603898d feat(frontend): add transfer mutation flows`.
-- `F5-05B` replaces the physical-count demo with persisted start, capture/save, resume, and finalize workflows; ordinary verification is recorded in the F5-05 evidence.
+- `F5-05B` replaces the physical-count demo with persisted start, capture/save, resume, and finalize workflows and was committed as `6bacb53 feat(frontend): add physical count workflow`.
+- `F5-06` fixed the count-start idempotency blocker, passed integrated closeout verification, updated closeout docs, and is ready for documentation-only review/commit.
 - The user-level subagent routing blocker was resolved with explicit authorization.
 - Running authored line count: approximately 473 for F5-01A plus 397 for F5-01B, excluding ODD task-document-only changes.
 
 ## Next step
 
-Run `F5-06` integrated Phase 5 verification and closeout.
+Review and commit F5-06 closeout documentation.

@@ -1,5 +1,31 @@
 # Cambios recientes
 
+## 2026-09-28 — Cierre de Fase 5
+
+### Implementado
+
+- Traspasos persistidos con envío atómico, recepción de cantidades reales,
+  diferencias por faltantes y movimientos auditados de origen y destino.
+- Reintentos de envío y recepción conservan el resultado sin duplicar
+  movimientos de inventario.
+- Conteos físicos persistidos con fotografía inicial del inventario,
+  observaciones editables y finalización mediante movimientos `conteo`.
+- El inicio de conteo es idempotente: un reintento no crea documentos, líneas
+  de fotografía ni folios adicionales.
+- La finalización concilia contra el saldo vigente y sus reintentos no duplican
+  movimientos.
+- Las pantallas de traspasos y conteos físicos usan documentos obtenidos de la
+  API como fuente operativa.
+
+### Verificación
+
+- Backend: `136 passed` con `cd backend && .venv/bin/pytest -q`.
+- Backend: `cd backend && .venv/bin/ruff check --no-cache app tests alembic`
+  sin errores.
+- Frontend: `cd frontend && npm run build` correcto.
+- El build mantiene una advertencia no fatal sobre la anotación `@__PURE__` en
+  `src/screens/index.jsx:4478`.
+
 ## 2026-09-22 — Cierre operativo del siguiente bloque de Fase 4
 
 ### Implementado
