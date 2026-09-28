@@ -12384,6 +12384,7 @@ function PhysicalCountView({ sucursales = [], currentUser, actions = {} }) {
   const [scan, setScan] = useState("");
   const [dirty, setDirty] = useState(false);
   const [mutation, setMutation] = useState("");
+  const createKey = React.useRef(null);
   const finalizeKeys = React.useRef(new Map());
 
   const loadCounts = async () => {
@@ -12450,13 +12451,23 @@ function PhysicalCountView({ sucursales = [], currentUser, actions = {} }) {
     if (!branchId) return;
     setMutation("create");
     setError("");
+    if (createKey.current?.branchId !== branchId) {
+      createKey.current = { branchId, key: crypto.randomUUID() };
+    }
     try {
-      const document = await actions.createPhysicalCount({ branch_id: branchId });
+      const document = await actions.createPhysicalCount(
+        { branch_id: branchId },
+        createKey.current.key,
+      );
+      createKey.current = null;
       replaceCount(document);
       enterCount(document);
       setCreateOpen(false);
       setBranchId("");
     } catch (requestError) {
+      if (requestError.status >= 400 && requestError.status < 500) {
+        createKey.current = null;
+      }
       setError(requestError.message || "No se pudo iniciar el conteo.");
     } finally {
       setMutation("");
@@ -12949,6 +12960,7 @@ function PhysicalCountView({ sucursales = [], currentUser, actions = {} }) {
                 className="btn-ghost"
                 disabled={mutation !== ""}
                 onClick={() => {
+                  createKey.current = null;
                   setCreateOpen(false);
                   setBranchId("");
                 }}
@@ -12961,7 +12973,10 @@ function PhysicalCountView({ sucursales = [], currentUser, actions = {} }) {
               <select
                 value={branchId}
                 disabled={mutation !== ""}
-                onChange={(event) => setBranchId(event.target.value)}
+                onChange={(event) => {
+                  createKey.current = null;
+                  setBranchId(event.target.value);
+                }}
                 style={{ display: "block", width: "100%", marginTop: 6 }}
               >
                 <option value="">Seleccioná una sucursal…</option>
@@ -12986,6 +13001,7 @@ function PhysicalCountView({ sucursales = [], currentUser, actions = {} }) {
                 className="btn-secondary"
                 disabled={mutation !== ""}
                 onClick={() => {
+                  createKey.current = null;
                   setCreateOpen(false);
                   setBranchId("");
                 }}

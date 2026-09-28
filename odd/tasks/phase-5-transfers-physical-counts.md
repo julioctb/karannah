@@ -306,7 +306,7 @@ Transfers and physical counts currently exist only as isolated frontend demo sta
 
 ### F5-06 — Close Phase 5 with integrated verification
 
-- [ ] Run all applicable backend and frontend checks.
+- [x] Run all applicable backend and frontend checks.
 - [ ] Confirm retry evidence shows no duplicate stock movements.
 - [ ] Confirm transfer and count documents reconcile to ledger entries and balances.
 - [ ] Confirm no Phase 5 demo dataset remains an operational source of truth.
@@ -321,7 +321,13 @@ Transfers and physical counts currently exist only as isolated frontend demo sta
   - Ruff
   - frontend production build
 - Forecast: documentation-only authored delta after verification.
-- Evidence: pending.
+- Evidence:
+  - Independent closeout verification found physical-count creation was not retry-idempotent: repeated `POST /physical-counts` requests allocated duplicate documents, snapshots, and folios.
+  - Strict TDD RED: focused Phase 5 tests failed `test_start_count_is_idempotent_without_duplicate_document_snapshot_or_folio`; replay returned a different count and folio (`1 failed, 44 passed in 1.29s`).
+  - Backend correction requires `Idempotency-Key` on count creation, records the request before snapshot/folio allocation, returns the stored count for an identical replay, and returns `409` when the same key is reused with a changed branch payload.
+  - Frontend correction threads the key through the API adapter and app action; the count screen preserves it across network/5xx uncertainty, clears it after success or 4xx responses, and rotates it when the selected branch changes.
+  - GREEN and integrated checks: focused Phase 5 tests `45 passed in 1.14s`; full backend `136 passed in 4.04s`; Ruff all checks passed; frontend production build passed with the existing invalid `/* @__PURE__ */` annotation warning at `src/screens/index.jsx:4478`.
+  - F5-06 remains open pending independent closeout confirmation of the remaining reconciliation and demo-source checklist items; `docs/PLAN.md` and `docs/CHANGELOG.md` were intentionally not changed.
 
 ## Acceptance criteria
 

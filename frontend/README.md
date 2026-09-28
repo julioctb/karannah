@@ -23,7 +23,8 @@ npm run preview   # sirve dist/ localmente
 
 The frontend uses FastAPI for local authentication, catalog, inventory, clients,
 sales, cash management, POS, credits, transfers, and physical counts. Transfer and
-physical-count screens provide persisted API-backed operational workflows.
+physical-count screens provide persisted API-backed operational workflows, including
+retry-safe idempotency keys for physical-count creation and finalization.
 Promotions, reports, and configuration retain isolated demo data until their
 corresponding slices. Supabase will be introduced in Phase 9 and used only for
 authentication.

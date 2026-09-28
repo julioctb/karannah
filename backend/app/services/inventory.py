@@ -441,7 +441,18 @@ async def create_physical_count(
     payload: PhysicalCountCreate,
     profile: UserProfile,
     branch: Branch,
+    idempotency_key: str,
 ) -> PhysicalCountRead:
+    idem = await idempotency_record(
+        db,
+        profile,
+        idempotency_key,
+        request_hash(payload),
+        "inventory.physical-counts.create",
+    )
+    if idem.response is not None:
+        return PhysicalCountRead.model_validate(idem.response)
+
     snapshot_rows = (
         await db.execute(
             select(StockBalance.variant_id, StockBalance.quantity)
@@ -464,7 +475,10 @@ async def create_physical_count(
     )
     db.add(count)
     await db.flush()
-    return _physical_count_read(count)
+    result = _physical_count_read(count)
+    idem.response = result.model_dump(mode="json")
+    await db.flush()
+    return result
 
 
 async def list_physical_counts(

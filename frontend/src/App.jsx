@@ -285,8 +285,14 @@ export default function App() {
         user.branches || [],
         signal,
       ),
-    createPhysicalCount: (payload) =>
-      createPhysicalCount(token, payload, readModel, user.branches || []),
+    createPhysicalCount: (payload, idempotencyKey) =>
+      createPhysicalCount(
+        token,
+        payload,
+        idempotencyKey,
+        readModel,
+        user.branches || [],
+      ),
     updatePhysicalCountLines: (countId, payload) =>
       updatePhysicalCountLines(
         token,

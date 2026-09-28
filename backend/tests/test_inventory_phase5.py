@@ -26,7 +26,13 @@ from app.models import (
 )
 from app.models.catalog import Category, Product, ProductGroup, ProductStatus, ProductVariant
 from app.models.identity import Branch, Role, UserBranchAssignment, UserProfile
-from app.models.inventory import StockBalance, StockEntry, StockMovementType
+from app.models.inventory import (
+    PhysicalCountLine,
+    StockBalance,
+    StockEntry,
+    StockMovementType,
+)
+from app.models.sales import FolioCounter
 
 
 def _transfer_quantity_database() -> sqlite3.Connection:
@@ -724,7 +730,9 @@ def test_api_contract_documents_transfer_workflow():
 
 async def _create_count(client: AsyncClient, branch_id: uuid.UUID = ORIGIN_ID) -> dict:
     response = await client.post(
-        "/api/v1/inventory/physical-counts", json={"branch_id": str(branch_id)}
+        "/api/v1/inventory/physical-counts",
+        json={"branch_id": str(branch_id)},
+        headers={"Idempotency-Key": str(uuid.uuid4())},
     )
     assert response.status_code == 201, response.text
     return response.json()
@@ -742,6 +750,39 @@ async def _update_count_lines(
             ]
         },
     )
+
+
+async def test_start_count_is_idempotent_without_duplicate_document_snapshot_or_folio(
+    transfer_client, transfer_session_factory
+):
+    url = "/api/v1/inventory/physical-counts"
+    headers = {"Idempotency-Key": "start-count"}
+    payload = {"branch_id": str(ORIGIN_ID)}
+
+    missing_key = await transfer_client.post(url, json=payload)
+    assert missing_key.status_code == 422
+
+    created = await transfer_client.post(url, json=payload, headers=headers)
+    assert created.status_code == 201
+    replay = await transfer_client.post(url, json=payload, headers=headers)
+    assert replay.status_code == 201
+    assert replay.json() == created.json()
+
+    changed = await transfer_client.post(
+        url,
+        json={"branch_id": str(DESTINATION_ID)},
+        headers=headers,
+    )
+    assert changed.status_code == 409
+
+    async with transfer_session_factory() as session:
+        counts = list(await session.scalars(select(PhysicalCount)))
+        lines = list(await session.scalars(select(PhysicalCountLine)))
+        business_year = int(created.json()["folio"].split("-")[2])
+        counter = await session.get(FolioCounter, ("CF", ORIGIN_ID, business_year))
+        assert [str(count.id) for count in counts] == [created.json()["id"]]
+        assert len(lines) == 3
+        assert counter is not None and counter.next_value == 2
 
 
 async def test_start_count_snapshots_recorded_active_balances_in_variant_order(
@@ -801,7 +842,9 @@ async def test_count_list_detail_and_authorization(transfer_client):
     assert (await transfer_client.get("/api/v1/inventory/physical-counts")).status_code == 403
     assert (
         await transfer_client.post(
-            "/api/v1/inventory/physical-counts", json={"branch_id": str(ORIGIN_ID)}
+            "/api/v1/inventory/physical-counts",
+            json={"branch_id": str(ORIGIN_ID)},
+            headers={"Idempotency-Key": "seller-count"},
         )
     ).status_code == 403
 

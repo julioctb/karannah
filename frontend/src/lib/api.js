@@ -813,11 +813,18 @@ export async function getPhysicalCountDetail(
   return mapPhysicalCount(row, readModel, branches);
 }
 
-export async function createPhysicalCount(token, payload, readModel, branches) {
+export async function createPhysicalCount(
+  token,
+  payload,
+  idempotencyKey,
+  readModel,
+  branches,
+) {
   const row = await request("/inventory/physical-counts", {
     token,
     method: "POST",
     body: payload,
+    headers: { "Idempotency-Key": idempotencyKey },
   });
   return mapPhysicalCount(row, readModel, branches);
 }

@@ -258,11 +258,18 @@ async def receive_transfer(
     status_code=status.HTTP_201_CREATED,
 )
 async def create_physical_count(
-    payload: PhysicalCountCreate, db: Db, profile: Profile
+    payload: PhysicalCountCreate,
+    db: Db,
+    profile: Profile,
+    idempotency_key: Annotated[
+        str, Header(alias="Idempotency-Key", min_length=1, max_length=120)
+    ],
 ) -> PhysicalCountRead:
     ensure_role(profile, Role.ADMIN, Role.ENCARGADO)
     branch = await require_visible_branch(db, profile, payload.branch_id)
-    result = await create_physical_count_service(db, payload, profile, branch)
+    result = await create_physical_count_service(
+        db, payload, profile, branch, idempotency_key
+    )
     await db.commit()
     return result
 
