@@ -2,11 +2,11 @@
 
 ## Status
 
-- State: active
+- State: closed
 - Route: organic development (ODD), delegated direct implementation
 - Repository branch at creation: `main`
 - Active feature branch: `feature/phase-5-transfers-counts`
-- Next task: `F5-06`
+- Next task: none
 - Delivery strategy: `ask-on-risk`
 - Chain strategy: `stacked-to-main`, selected by the user
 - Engram mirror: active
@@ -360,10 +360,10 @@ Transfers and physical counts currently exist only as isolated frontend demo sta
 - `F5-05A1` reduced the transfer candidate to API-backed read-only history and was committed as `080390f feat(frontend): load transfer history from API`.
 - `F5-05A2` adds API-backed transfer create, send, and receive workflows and was committed as `603898d feat(frontend): add transfer mutation flows`.
 - `F5-05B` replaces the physical-count demo with persisted start, capture/save, resume, and finalize workflows and was committed as `6bacb53 feat(frontend): add physical count workflow`.
-- `F5-06` fixed the count-start idempotency blocker, passed integrated closeout verification, updated closeout docs, and is ready for documentation-only review/commit.
+- `F5-06` fixed the count-start idempotency blocker, passed integrated closeout verification, updated closeout docs, and was committed as `15234ac docs: close phase five`.
 - The user-level subagent routing blocker was resolved with explicit authorization.
 - Running authored line count: approximately 473 for F5-01A plus 397 for F5-01B, excluding ODD task-document-only changes.
 
 ## Next step
 
-Review and commit F5-06 closeout documentation.
+No Phase 5 implementation task remains pending. Continue with Phase 6 planning when ready.
