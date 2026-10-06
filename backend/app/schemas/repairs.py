@@ -18,7 +18,7 @@ class RepairRead(BaseModel):
     product_description: str
     service: str
     status: RepairStatus
-    quoted_price: Decimal | None = None
+    price: Decimal | None = None
     received_at: date
     expected_at: date | None = None
     completed_at: date | None = None

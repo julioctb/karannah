@@ -660,7 +660,7 @@
       "cliente": "María González",
       "producto": "Anillo Oro 14K",
       "servicio": "Ajuste talla",
-      "estado": "recibido",
+      "estado": "received",
       "fecha": "2026-08-10",
       "estimada": "2026-08-15"
     },
@@ -669,7 +669,7 @@
       "cliente": "Roberto Hernández",
       "producto": "Pulsera Tennis",
       "servicio": "Cambio piedra",
-      "estado": "pendiente_taller",
+      "estado": "in_workshop",
       "fecha": "2026-08-08",
       "estimada": "2026-08-18"
     },
@@ -678,7 +678,7 @@
       "cliente": "Ana Martínez",
       "producto": "Collar Veneciano",
       "servicio": "Limpieza profunda",
-      "estado": "en_proceso",
+      "estado": "in_workshop",
       "fecha": "2026-08-05",
       "estimada": "2026-08-12"
     },
@@ -687,7 +687,7 @@
       "cliente": "Carlos López",
       "producto": "Reloj Automático",
       "servicio": "Restauración",
-      "estado": "terminado",
+      "estado": "ready",
       "fecha": "2026-08-01",
       "estimada": "2026-08-10"
     },
@@ -696,7 +696,7 @@
       "cliente": "Laura Sánchez",
       "producto": "Aretes Esmeralda",
       "servicio": "Engaste",
-      "estado": "enviado",
+      "estado": "in_workshop",
       "fecha": "2026-08-06",
       "estimada": "2026-08-16"
     }

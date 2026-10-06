@@ -209,6 +209,30 @@ No existe registro publico.
   motivo. Solo permite cancelar con caja abierta cuando hubo efectivo y agrega
   movimientos compensatorios de inventario, pagos, caja y crédito.
 
+## Reparaciones
+
+- Las reparaciones siguen siendo visibles globalmente para usuarios autenticados;
+  `branch_id` conserva la sucursal operativa usada para el folio y para enlazar la
+  venta/caja. Los registros heredados pueden no tener sucursal, pero toda alta
+  nueva debe incluirla.
+- Los folios nuevos usan `RP-SUC-AÑO-NÚMERO`.
+- El flujo de servicio usa exclusivamente `received`, `in_workshop` y `ready`.
+  Terminar el servicio, cobrar y entregar son conceptos separados.
+- `client_id` es nullable para permitir la excepcion de cliente libre;
+  `client_name` siempre conserva el nombre mostrado al cliente. Solo se almacena
+  el importe `price` de cara al cliente.
+- `sale_id` enlaza como maximo una venta real por reparacion. `paid_amount` y
+  `balance` se derivan del precio y de los pagos/credito de esa venta; no existe
+  un ledger de pago paralelo en reparaciones.
+- `delivered_at` registra la entrega por separado del estado de servicio.
+  `blocked_for_review` marca una reparacion cuya venta fue cancelada antes de la
+  entrega y que requiere revision antes de reactivarse o cobrarse otra vez.
+- `repair_status_history` conserva de forma append-only la reparacion, estado
+  anterior nullable, estado nuevo, actor, timestamp y nota/razon opcional. La
+  aplicacion y un trigger de PostgreSQL impiden modificar o borrar entradas.
+- Esta fundacion no agrega rutas de alta, actualizacion, transicion, cobro ni
+  entrega; esos contratos se incorporaran en unidades posteriores de la fase.
+
 ## Errores
 
 - `401`: token ausente, invalido o expirado.

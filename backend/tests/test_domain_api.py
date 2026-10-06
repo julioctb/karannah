@@ -258,8 +258,8 @@ async def session_factory():
                     client_name="María López",
                     product_description="Anillo roto",
                     service="Soldadura",
-                    status=RepairStatus.RECIBIDO,
-                    quoted_price=150.0,
+                    status=RepairStatus.RECEIVED,
+                    price=150.0,
                     received_at=date(2025, 3, 1),
                 ),
                 Repair(
@@ -269,7 +269,7 @@ async def session_factory():
                     client_name="Mostrador",
                     product_description="Cadena cortada",
                     service="Reparación",
-                    status=RepairStatus.EN_PROCESO,
+                    status=RepairStatus.IN_WORKSHOP,
                     received_at=date(2025, 3, 20),
                 ),
             ]
@@ -664,8 +664,10 @@ def test_sales_day_bounds_use_mexico_city_timezone():
 async def test_repairs_list_and_status_filter(client):
     rows = (await client.get("/api/v1/repairs")).json()
     assert [r["folio"] for r in rows] == ["R-002", "R-001"]
-    pendientes = (await client.get("/api/v1/repairs", params={"status": "recibido"})).json()
-    assert [r["folio"] for r in pendientes] == ["R-001"]
+    assert rows[1]["price"] == "150.00"
+    assert "quoted_price" not in rows[1]
+    received = (await client.get("/api/v1/repairs", params={"status": "received"})).json()
+    assert [r["folio"] for r in received] == ["R-001"]
 
 
 async def test_repairs_visible_to_vendedor(client):

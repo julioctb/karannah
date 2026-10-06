@@ -10,7 +10,7 @@ from app.models.catalog import Category, Collection, Material, Product, Subcateg
 from app.models.clients import Client, CreditEntry
 from app.models.identity import Branch, Role, UserBranchAssignment, UserProfile
 from app.models.inventory import StockEntry
-from app.models.repairs import Repair
+from app.models.repairs import Repair, RepairStatus
 from app.models.sales import Sale
 from app.seed import _load_data, _wipe, seed
 
@@ -47,6 +47,13 @@ async def test_seed_full_dataset(session: AsyncSession) -> None:
     for model, expected in counts.items():
         n = await session.scalar(select(func.count()).select_from(model))
         assert n == expected, model
+
+    repair_statuses = set(await session.scalars(select(Repair.status)))
+    assert repair_statuses == {
+        RepairStatus.RECEIVED,
+        RepairStatus.IN_WORKSHOP,
+        RepairStatus.READY,
+    }
 
     n_subs = await session.scalar(select(func.count()).select_from(Subcategory))
     expected_subs = sum(len(s) for s in data["SUBCATEGORIAS_SEED"].values())

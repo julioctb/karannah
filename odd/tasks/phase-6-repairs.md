@@ -1,0 +1,197 @@
+# Phase 6 — Repairs
+
+## Status
+
+- State: active
+- Route: organic development (ODD), delegated implementation per work unit
+- Repository branch at creation: `feature/phase-5-transfers-counts`
+- Active feature branch: `feature/phase-6-repairs`
+- Next task: `F6-02 — Implement repair intake and update APIs`
+- Delivery strategy: `ask-on-risk`
+- Chain strategy: unset
+- Engram mirror: active
+- Forecast: substantial multi-area work across backend models/services/API/tests, frontend API/screen integration, and API documentation; split into reviewable work units before implementation
+
+## Objective
+
+Implement Phase 6 from `docs/PLAN.md`: operational repair intake, immutable repair status history, validated workflow transitions, and payment/delivery rules integrated with real sales so repairs cannot be double-charged or delivered unpaid.
+
+## Problem and why it matters
+
+Repairs are currently mostly read-only API data plus frontend-local actions. Payment and delivery state are not authoritative on the backend, status history is not immutable, and the frontend maps backend states into local concepts with unknown payment/delivery status. That permits double sources of truth, double collection risk, and delivery without enforceable payment evidence.
+
+## Known Phase 6 requirements
+
+1. Unify frontend and backend repair states.
+2. Support repair intake with cost, price, and relevant dates.
+3. Store immutable status history and validate transitions.
+4. Charge repairs through real sales.
+5. Prevent double charge.
+6. Prevent delivery before payment.
+7. Separate finished, paid, and delivered concepts.
+
+## Initial exploration evidence
+
+- `docs/PLAN.md` defines Phase 6 scope and exit bullets under “Fase 6 — Reparaciones”.
+- `backend/app/models/repairs.py` currently has one `Repair` model with `RepairStatus` values `recibido`, `pendiente_taller`, `en_proceso`, `terminado`, `enviado`; no payment or delivered state is persisted.
+- `backend/app/api/v1/repairs.py` currently exposes read-only `GET /repairs` with optional status filter.
+- `backend/app/schemas/repairs.py` exposes only `RepairRead`.
+- `frontend/src/lib/api.js` maps repair payment/delivery as unknown or false and compresses backend statuses to local UI statuses.
+- `frontend/src/domain/appModel.js` keeps repair write actions as no-op placeholders in API-connected mode.
+- `frontend/src/screens/index.jsx` already contains repair UI forms/actions, but they are not backed by repair write APIs.
+- `backend/tests/test_domain_api.py` has existing read-only repair coverage; no dedicated Phase 6 tests exist yet.
+- Delegated exploration confirmed the draft migration mirrors this limited model, backend seed data has five disposable demo repairs without price/payment/delivery/history, `repairToPosItem()` has no callers, and checkout currently requires inventory-backed `SaleItem.variant_id`, so repair charging needs a deliberate service-line/sale-link design rather than the unused frontend pseudo-item.
+
+## Product decisions
+
+1. Repairs remain globally visible, matching the current read-only endpoint behavior, but new operational records still need the selected branch context required for folio generation and sale/cash-session linkage.
+2. New repair folios use `RP-SUC-AÑO-NÚMERO`.
+3. Repair service workflow is `received` → `in_workshop` → `ready` (`Recibida` → `En taller` → `Lista`); legacy `enviado` is not preserved as a distinct Phase 6 service state.
+4. Store only the customer-facing repair price for now; no internal repair cost is persisted in Phase 6.
+5. Registered client is preferred for intake, but exceptional free-text customer intake is allowed with explicit confirmation.
+6. Repair collection is recorded through a real linked sale, not a standalone repair payment ledger.
+7. Partial payments are allowed.
+8. Approved credit counts as paid enough for delivery, with debt remaining in accounts receivable.
+9. A partially paid repair may be delivered by any otherwise-authorized user only after explicit confirmation; the remaining balance must remain visible/auditable.
+10. A `ready` repair may reopen to `in_workshop` only with a mandatory reason recorded in immutable history.
+11. Delivered repairs are terminal: no workflow, price, payment, or primary data changes after delivery.
+12. If the linked sale is cancelled before delivery, the repair becomes blocked for admin/manager review before it can be reactivated or charged again.
+13. Cancelling a linked repair sale after delivery is prohibited.
+
+## Product decisions still required before source implementation
+
+None currently known. If implementation exposes a new edge case, pause and resolve it before writing beyond that work unit.
+
+## Work units
+
+### F6-00 — Resolve repair workflow decisions and slice plan
+
+- [x] Complete delegated architecture mapping for backend, frontend, tests, and docs.
+- [x] Resolve remaining product decisions above.
+- [x] Select chain strategy if the forecasted review workload exceeds a single reviewable PR: keep `ask-on-risk` with work-unit commits and promote to chained PRs if a unit approaches the review budget.
+- [x] Confirm effective test mode and commands.
+- [x] Reconcile this task document and Engram mirror before source writes.
+- Route: parent coordination plus read-only delegated exploration.
+- Checks: clean branch state and documented decisions.
+- Evidence:
+  - Read-only delegated exploration completed under task `mux5rp26-1-0kco` and mapped backend model/API/schema/test gaps, frontend mapping/no-op write gaps, seed/demo state, sale integration constraints, candidate surfaces, and verification commands.
+  - User decisions captured: repairs globally visible; folios `RP-SUC-AÑO-NÚMERO`; service workflow `received` → `in_workshop` → `ready`; only customer-facing price is stored; registered client preferred with confirmed free-text exception; repair collection through a real linked sale; partial payments allowed; approved credit counts as paid enough for delivery; partially paid repairs may be delivered by any otherwise-authorized user after explicit confirmation, with remaining balance visible/auditable; `ready` may reopen with mandatory reason; delivered repairs are terminal; pre-delivery sale cancellation blocks the repair for admin/manager review; post-delivery linked sale cancellation is prohibited.
+  - Verification mode: strict TDD for backend behavior; focused command starts as `cd backend && .venv/bin/pytest -q tests/test_repairs_phase6.py`; regression commands are full backend pytest and Ruff, with frontend build added when frontend work starts.
+
+### F6-01 — Persist repair workflow foundations
+
+- [x] Align backend repair state vocabulary with separated finished/paid/delivered concepts.
+- [x] Add immutable repair status history model/table and relationships.
+- [x] Add persisted payment/delivery references needed to prevent double charge and unpaid delivery.
+- [x] Add model/migration/schema tests for constraints and history shape.
+- [x] Update API contract vocabulary.
+- Route: delegated writer.
+- Candidate surfaces:
+  - `backend/app/models/repairs.py`
+  - `backend/app/models/__init__.py`
+  - `backend/app/schemas/repairs.py`
+  - `backend/app/seed_data.json`
+  - `backend/alembic/versions/0009_phase6_repairs.py`
+  - `backend/tests/test_repairs_phase6.py`
+  - `backend/tests/test_domain_api.py`
+  - `backend/tests/test_seed.py`
+  - `docs/API_CONTRACT.md`
+- Checks: focused backend repair tests, full backend tests, Ruff.
+- Evidence:
+  - Delegated writer implemented Phase 6 repair foundations with strict TDD: initial focused RED `3 failed, 2 passed` for canonical enum rejection, migration trigger SQL, and downgrade ordering; GREEN focused `5 passed`.
+  - Changed foundations include canonical `RepairStatus` values `received`, `in_workshop`, `ready`; canonical `price` field; nullable `branch_id`, unique nullable `sale_id`, `delivered_at`, `blocked_for_review`; and `RepairStatusHistory` with repair/from/to/actor/timestamp/note.
+  - PostgreSQL migration `0009_phase6_repairs.py` maps legacy statuses into canonical values, renames `quoted_price` to `price`, adds repair operational columns, creates `repair_status_history`, installs an UPDATE/DELETE rejection trigger for append-only history, and clears the status default before downgrade enum conversion.
+  - Writer checks: `cd backend && .venv/bin/pytest -q tests/test_repairs_phase6.py tests/test_domain_api.py tests/test_seed.py` → 48 passed in 2.31s; `cd backend && .venv/bin/pytest -q` → 141 passed in 4.33s; `cd backend && .venv/bin/ruff check --no-cache app tests alembic` → all checks passed; `git diff --check` passed.
+  - Native assessment was unassessable because new untracked Phase 6 files require explicit review declaration; risk-gated path required independent verification.
+  - Independent verification initially failed transitional vocabulary/downgrade/append-only concerns; correction removed legacy enum aliases and `quoted_price`, updated schema/tests/seed to canonical values, fixed downgrade ordering, and added PostgreSQL append-only trigger/function.
+  - Final independent verification verdict: PASS, no blocking findings; focused repair/domain/seed tests 48 passed in 2.25s; full backend 141 passed in 4.41s; Ruff all checks passed. Risk: migration and trigger behavior are structurally tested but not applied to live PostgreSQL.
+  - Work-unit commit was created as `feat(repairs): add workflow foundations`; final amended identity is reported in session output because a commit cannot contain its own final hash.
+
+### F6-02 — Implement repair intake and update APIs
+
+- [ ] Add repair create/update schemas and routes.
+- [ ] Validate required client, piece/service, quoted price/cost, received/expected dates, and roles.
+- [ ] Generate retry-safe repair intake results with idempotency where mutations need uncertainty safety.
+- [ ] Preserve branch/visibility rules once resolved in F6-00.
+- [ ] Add lifecycle and authorization tests.
+- [ ] Update API contract.
+- Route: delegated writer.
+- Candidate surfaces:
+  - `backend/app/api/v1/repairs.py`
+  - `backend/app/schemas/repairs.py`
+  - `backend/app/services/repairs.py` if introduced
+  - `backend/tests/test_*repair*.py` or focused domain API tests
+  - `docs/API_CONTRACT.md`
+- Checks: focused backend repair tests, full backend tests, Ruff.
+- Evidence: pending.
+
+### F6-03 — Implement status transitions and immutable history
+
+- [ ] Add explicit status-transition endpoint(s).
+- [ ] Enforce allowed transitions and immutable history append behavior.
+- [ ] Keep completed, paid, and delivered states separate.
+- [ ] Reject delivery until payment evidence exists.
+- [ ] Add transition/history tests including invalid transitions.
+- [ ] Update API contract.
+- Route: delegated writer.
+- Candidate surfaces:
+  - `backend/app/api/v1/repairs.py`
+  - `backend/app/schemas/repairs.py`
+  - `backend/app/services/repairs.py` if introduced
+  - `backend/tests/test_*repair*.py` or focused domain API tests
+  - `docs/API_CONTRACT.md`
+- Checks: focused backend repair tests, full backend tests, Ruff.
+- Evidence: pending.
+
+### F6-04 — Charge repairs through real sales
+
+- [ ] Add the chosen sale/repair linkage so a repair can be charged exactly once.
+- [ ] Make repair payment idempotent and prevent double charge.
+- [ ] Reflect paid state from the authoritative sale/payment result.
+- [ ] Preserve existing POS/sales invariants and money handling.
+- [ ] Add payment, double-charge, and unpaid-delivery tests.
+- [ ] Update API contract.
+- Route: delegated writer.
+- Candidate surfaces:
+  - `backend/app/models/repairs.py`
+  - `backend/app/models/sales.py` if needed
+  - `backend/app/services/pos.py`
+  - `backend/app/api/v1/repairs.py`
+  - `backend/app/schemas/repairs.py`
+  - `backend/tests/test_*repair*.py` and/or sales/POS tests
+  - `docs/API_CONTRACT.md`
+- Checks: focused backend repair/POS tests, full backend tests, Ruff.
+- Evidence: pending.
+
+### F6-05 — Connect repair frontend to API workflows
+
+- [ ] Add repair API adapters and response mappers for create/update/status/payment/delivery.
+- [ ] Replace repair no-op API-mode actions with backend calls and refresh behavior.
+- [ ] Remove repair payment/delivery unknown placeholders once backend exposes authoritative fields.
+- [ ] Preserve existing Spanish UI copy and loading/error states.
+- [ ] Build frontend production bundle.
+- Route: delegated writer.
+- Candidate surfaces:
+  - `frontend/src/lib/api.js`
+  - `frontend/src/domain/appModel.js`
+  - `frontend/src/App.jsx`
+  - `frontend/src/screens/index.jsx`
+  - `frontend/README.md` if workflow docs need updating
+- Checks: frontend production build plus focused structural spot-checks.
+- Evidence: pending.
+
+## Verification mode
+
+- Backend focused runner: to be finalized in F6-00; likely `cd backend && .venv/bin/pytest -q tests/test_domain_api.py` until dedicated Phase 6 tests are created.
+- Backend full runner: `cd backend && .venv/bin/pytest -q`.
+- Backend lint runner: `cd backend && .venv/bin/ruff check --no-cache app tests alembic`.
+- Frontend runner: `cd frontend && npm run build`.
+- Strict TDD is preferred for behavior changes with deterministic expected outcomes; exact RED/GREEN evidence must be recorded when applicable.
+
+## Closeout checklist
+
+- [ ] All Phase 6 work units complete.
+- [ ] Backend tests, Ruff, and frontend build recorded.
+- [ ] `docs/PLAN.md` and `docs/CHANGELOG.md` updated.
+- [ ] Native review lifecycle handled when enabled for each candidate.
+- [ ] Work-unit commits recorded as evidence.

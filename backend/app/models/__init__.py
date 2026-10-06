@@ -32,7 +32,7 @@ from app.models.inventory import (
     StockTransferLine,
     StockTransferStatus,
 )
-from app.models.repairs import Repair, RepairStatus
+from app.models.repairs import Repair, RepairStatus, RepairStatusHistory
 from app.models.sales import (
     DiscountApproval,
     FolioCounter,
@@ -73,6 +73,7 @@ __all__ = [
     "ProductVariant",
     "Repair",
     "RepairStatus",
+    "RepairStatusHistory",
     "Role",
     "Sale",
     "SaleCondition",
