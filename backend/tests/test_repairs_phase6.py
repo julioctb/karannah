@@ -1,16 +1,112 @@
 from __future__ import annotations
 
 import importlib.util
-from datetime import date
+import uuid
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pytest
-from sqlalchemy import MetaData, Table, UniqueConstraint, create_engine
+import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import MetaData, Table, UniqueConstraint, create_engine, select
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
 
 from app import models
-from app.core.db import Base
+from app.api.deps import get_current_claims
+from app.core.db import Base, get_db
+from app.core.security import TokenClaims
+from app.main import app
 from app.schemas.repairs import RepairRead
+
+ADMIN_ID = uuid.uuid4()
+SELLER_ID = uuid.uuid4()
+BRANCH_T01 = uuid.uuid4()
+BRANCH_T02 = uuid.uuid4()
+
+
+@pytest_asyncio.fixture()
+async def repair_session_factory():
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:", poolclass=StaticPool)
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+
+    async with factory() as session:
+        session.add_all(
+            [
+                models.Branch(id=BRANCH_T01, code="T01", name="Centro"),
+                models.Branch(id=BRANCH_T02, code="T02", name="Norte"),
+                models.UserProfile(
+                    id=ADMIN_ID,
+                    email="admin-repairs@example.com",
+                    full_name="Admin",
+                    role=models.Role.ADMIN,
+                ),
+                models.UserProfile(
+                    id=SELLER_ID,
+                    email="seller-repairs@example.com",
+                    full_name="Seller",
+                    role=models.Role.VENDEDOR,
+                ),
+                models.Client(
+                    id=101,
+                    name="María Registrada",
+                    type=models.ClientType.MENUDEO,
+                    active=True,
+                ),
+                models.Client(
+                    id=102,
+                    name="Cliente Inactivo",
+                    type=models.ClientType.MENUDEO,
+                    active=False,
+                ),
+            ]
+        )
+        await session.flush()
+        session.add(
+            models.UserBranchAssignment(user_id=SELLER_ID, branch_id=BRANCH_T01)
+        )
+        await session.commit()
+
+    yield factory
+    await engine.dispose()
+
+
+@pytest_asyncio.fixture()
+async def repair_client(repair_session_factory):
+    async def override_db():
+        async with repair_session_factory() as session:
+            yield session
+
+    async def as_seller():
+        return TokenClaims(
+            user_id=str(SELLER_ID), email="seller-repairs@example.com", role=None
+        )
+
+    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_current_claims] = as_seller
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        yield client
+    app.dependency_overrides.clear()
+
+
+def _intake_payload(**changes):
+    payload = {
+        "branch_id": str(BRANCH_T01),
+        "client_id": 101,
+        "product_description": "Anillo de oro",
+        "service": "Ajuste de talla",
+        "price": "450.00",
+        "received_at": "2026-03-01",
+        "expected_at": "2026-03-08",
+        "notes": "Conservar grabado",
+    }
+    payload.update(changes)
+    return payload
 
 
 def test_repair_model_uses_phase6_service_vocabulary_and_operational_foundations():
@@ -251,4 +347,207 @@ def test_api_contract_documents_repair_foundations_without_future_endpoints():
     repair_section = contract.split("## Reparaciones", 1)[1].split("## ", 1)[0]
     assert "enviado" not in repair_section
     assert "cost" not in repair_section
-    assert "POST /repairs" not in repair_section
+
+
+@pytest.mark.asyncio
+async def test_create_repair_is_atomic_canonical_and_idempotent(
+    repair_client, repair_session_factory
+):
+    headers = {"Idempotency-Key": "repair-intake-1"}
+    first = await repair_client.post(
+        "/api/v1/repairs", json=_intake_payload(), headers=headers
+    )
+    assert first.status_code == 201, first.text
+    created = first.json()
+    assert created == {
+        "id": created["id"],
+        "folio": "RP-T01-2026-000001",
+        "client_id": 101,
+        "client_name": "María Registrada",
+        "product_description": "Anillo de oro",
+        "service": "Ajuste de talla",
+        "status": "received",
+        "price": "450.00",
+        "received_at": "2026-03-01",
+        "expected_at": "2026-03-08",
+        "completed_at": None,
+        "notes": "Conservar grabado",
+    }
+
+    repeated = await repair_client.post(
+        "/api/v1/repairs", json=_intake_payload(), headers=headers
+    )
+    assert repeated.status_code == 201
+    assert repeated.json() == created
+    changed = await repair_client.post(
+        "/api/v1/repairs",
+        json=_intake_payload(service="Pulido"),
+        headers=headers,
+    )
+    assert changed.status_code == 409
+
+    async with repair_session_factory() as session:
+        repairs = list((await session.scalars(select(models.Repair))).all())
+        history = list((await session.scalars(select(models.RepairStatusHistory))).all())
+        assert len(repairs) == 1
+        assert len(history) == 1
+        assert history[0].repair_id == repairs[0].id
+        assert history[0].from_status is None
+        assert history[0].to_status == models.RepairStatus.RECEIVED
+        assert history[0].actor_id == SELLER_ID
+
+
+@pytest.mark.asyncio
+async def test_create_repair_validates_customer_branch_dates_and_input(repair_client):
+    assert (
+        await repair_client.post("/api/v1/repairs", json=_intake_payload())
+    ).status_code == 422
+    assert (
+        await repair_client.post(
+            "/api/v1/repairs",
+            json=_intake_payload(branch_id=str(BRANCH_T02)),
+            headers={"Idempotency-Key": "hidden-branch"},
+        )
+    ).status_code == 404
+    assert (
+        await repair_client.post(
+            "/api/v1/repairs",
+            json=_intake_payload(client_id=999),
+            headers={"Idempotency-Key": "unknown-client"},
+        )
+    ).status_code == 404
+    assert (
+        await repair_client.post(
+            "/api/v1/repairs",
+            json=_intake_payload(client_id=102),
+            headers={"Idempotency-Key": "inactive-client"},
+        )
+    ).status_code == 404
+
+    invalid_payloads = [
+        _intake_payload(client_id=None, client_name="Cliente libre"),
+        _intake_payload(price="-0.01"),
+        _intake_payload(product_description="  "),
+        _intake_payload(service="  "),
+        _intake_payload(received_at="2026-03-09", expected_at="2026-03-08"),
+        _intake_payload(status="ready"),
+        _intake_payload(sale_id=1),
+    ]
+    for index, payload in enumerate(invalid_payloads):
+        response = await repair_client.post(
+            "/api/v1/repairs",
+            json=payload,
+            headers={"Idempotency-Key": f"invalid-{index}"},
+        )
+        assert response.status_code == 422, (payload, response.text)
+
+    accepted = await repair_client.post(
+        "/api/v1/repairs",
+        json=_intake_payload(
+            client_id=None,
+            client_name="  Cliente libre  ",
+            confirm_free_text_client=True,
+            price=None,
+        ),
+        headers={"Idempotency-Key": "free-text-confirmed"},
+    )
+    assert accepted.status_code == 201, accepted.text
+    assert accepted.json()["client_name"] == "Cliente libre"
+    assert accepted.json()["price"] is None
+
+
+@pytest.mark.asyncio
+async def test_repair_update_changes_only_intake_fields_and_respects_lifecycle(
+    repair_client, repair_session_factory
+):
+    created = await repair_client.post(
+        "/api/v1/repairs",
+        json=_intake_payload(),
+        headers={"Idempotency-Key": "repair-to-update"},
+    )
+    repair_id = created.json()["id"]
+    update = {
+        "client_id": None,
+        "client_name": "Cliente corregido",
+        "confirm_free_text_client": True,
+        "product_description": "Anillo con piedra",
+        "service": "Ajuste y pulido",
+        "price": "500.00",
+        "received_at": "2026-03-02",
+        "expected_at": None,
+        "notes": None,
+    }
+    changed = await repair_client.patch(f"/api/v1/repairs/{repair_id}", json=update)
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["client_id"] is None
+    assert changed.json()["client_name"] == "Cliente corregido"
+    assert changed.json()["status"] == "received"
+    assert changed.json()["price"] == "500.00"
+    assert changed.json()["expected_at"] is None
+
+    repeated = await repair_client.patch(f"/api/v1/repairs/{repair_id}", json=update)
+    assert repeated.status_code == 200
+    assert repeated.json() == changed.json()
+    for forbidden in (
+        {"status": "ready"},
+        {"branch_id": str(BRANCH_T02)},
+        {"sale_id": 1},
+        {"delivered_at": "2026-03-03T00:00:00Z"},
+        {"blocked_for_review": True},
+    ):
+        response = await repair_client.patch(
+            f"/api/v1/repairs/{repair_id}", json=forbidden
+        )
+        assert response.status_code == 422, (forbidden, response.text)
+
+    async with repair_session_factory() as session:
+        repair = await session.get(models.Repair, repair_id)
+        assert repair is not None
+        repair.blocked_for_review = True
+        await session.commit()
+    assert (
+        await repair_client.patch(
+            f"/api/v1/repairs/{repair_id}", json={"notes": "No permitido"}
+        )
+    ).status_code == 409
+
+    async with repair_session_factory() as session:
+        repair = await session.get(models.Repair, repair_id)
+        assert repair is not None
+        repair.blocked_for_review = False
+        repair.delivered_at = datetime(2026, 3, 10, tzinfo=UTC)
+        await session.commit()
+    assert (
+        await repair_client.patch(
+            f"/api/v1/repairs/{repair_id}", json={"notes": "Tampoco permitido"}
+        )
+    ).status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_repairs_are_globally_readable_but_hidden_branch_is_not_mutable(
+    repair_client, repair_session_factory
+):
+    async with repair_session_factory() as session:
+        hidden = models.Repair(
+            folio="RP-T02-2026-000001",
+            branch_id=BRANCH_T02,
+            client_name="Global",
+            product_description="Cadena",
+            service="Soldadura",
+            status=models.RepairStatus.RECEIVED,
+            received_at=date(2026, 3, 1),
+        )
+        session.add(hidden)
+        await session.commit()
+        await session.refresh(hidden)
+        hidden_id = hidden.id
+
+    listed = await repair_client.get("/api/v1/repairs")
+    assert listed.status_code == 200
+    assert any(row["id"] == hidden_id for row in listed.json())
+    assert (
+        await repair_client.patch(
+            f"/api/v1/repairs/{hidden_id}", json={"notes": "Sin alcance"}
+        )
+    ).status_code == 404

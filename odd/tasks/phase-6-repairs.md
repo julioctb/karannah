@@ -6,7 +6,7 @@
 - Route: organic development (ODD), delegated implementation per work unit
 - Repository branch at creation: `feature/phase-5-transfers-counts`
 - Active feature branch: `feature/phase-6-repairs`
-- Next task: `F6-02 — Implement repair intake and update APIs`
+- Next task: `F6-03 — Implement status transitions and immutable history`
 - Delivery strategy: `ask-on-risk`
 - Chain strategy: unset
 - Engram mirror: active
@@ -109,21 +109,30 @@ None currently known. If implementation exposes a new edge case, pause and resol
 
 ### F6-02 — Implement repair intake and update APIs
 
-- [ ] Add repair create/update schemas and routes.
-- [ ] Validate required client, piece/service, quoted price/cost, received/expected dates, and roles.
-- [ ] Generate retry-safe repair intake results with idempotency where mutations need uncertainty safety.
-- [ ] Preserve branch/visibility rules once resolved in F6-00.
-- [ ] Add lifecycle and authorization tests.
-- [ ] Update API contract.
-- Route: delegated writer.
+- [x] Add repair create/update schemas and routes.
+- [x] Validate required client, piece/service, price, received/expected dates, branch visibility, and roles.
+- [x] Generate retry-safe repair intake results with idempotency where mutations need uncertainty safety.
+- [x] Preserve branch/visibility rules once resolved in F6-00.
+- [x] Add lifecycle and authorization tests.
+- [x] Update API contract.
+- Route: delegated writer, completed inline after two writer timeouts left a partial candidate.
 - Candidate surfaces:
   - `backend/app/api/v1/repairs.py`
   - `backend/app/schemas/repairs.py`
-  - `backend/app/services/repairs.py` if introduced
-  - `backend/tests/test_*repair*.py` or focused domain API tests
+  - `backend/app/services/repairs.py`
+  - `backend/tests/test_repairs_phase6.py`
   - `docs/API_CONTRACT.md`
+  - `odd/tasks/phase-6-repairs.md`
 - Checks: focused backend repair tests, full backend tests, Ruff.
-- Evidence: pending.
+- Evidence:
+  - The first delegated writer timed out after leaving strict RED tests in `backend/tests/test_repairs_phase6.py`; a second writer attempt also timed out after partial implementation. Parent completed the bounded candidate because the implementation was already confined to the F6-02 surfaces.
+  - Implemented `POST /repairs` with required `Idempotency-Key`, branch authorization, `RP-SUC-YEAR-NUMBER` folio generation, registered-client canonical name, confirmed free-text customer exception, initial `received` status, and initial `RepairStatusHistory` entry.
+  - Implemented `PATCH /repairs/{id}` for intake fields only, scoped to visible branches, rejecting delivered or blocked-for-review repairs and forbidding service status, branch, sale, delivery, and review-block mutations through schema `extra=forbid`.
+  - Preserved global repair listing while hidden-branch mutations return `404`.
+  - Parent checks: `cd backend && .venv/bin/pytest -q tests/test_repairs_phase6.py` → 9 passed in 0.64s; `cd backend && .venv/bin/pytest -q tests/test_repairs_phase6.py tests/test_domain_api.py tests/test_seed.py` → 52 passed in 2.40s; full backend `145 passed in 4.59s`; Ruff initially failed on one unused import, then passed after cleanup.
+  - Independent verification initially failed only stale ODD tracking; implementation, API contract, and checks passed. The task document was then updated with this evidence.
+  - Native review approved and was acknowledged under lineage `review-0b635b8f37c0995e` for target `sha256:d5ed6b8d459c700f60d7408c4881ef876aefa6c243f1bb81db39d364df85a197`.
+  - Work-unit commit was created as `feat(repairs): add intake APIs`; final amended identity is reported in session output because a commit cannot contain its own final hash.
 
 ### F6-03 — Implement status transitions and immutable history
 

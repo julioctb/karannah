@@ -17,9 +17,9 @@ cliente de Supabase del frontend se incorporara en la Fase 9 solo para Auth.
   decimales, por ejemplo `"1240.00"`. El frontend no debe usar aritmetica de
   punto flotante para totales.
 - Los listados actuales responden arreglos y aceptan `limit` y `offset`.
-- Las operaciones que crean ventas o abonos aceptan `Idempotency-Key`; repetir la
-  misma clave con el mismo cuerpo devuelve el mismo resultado y cambiar el cuerpo
-  produce `409`.
+- Las operaciones que crean ventas, abonos o altas operativas idempotentes aceptan
+  `Idempotency-Key`; repetir la misma clave con el mismo cuerpo devuelve el mismo
+  resultado y cambiar el cuerpo produce `409`.
 
 ## Autenticacion
 
@@ -230,8 +230,23 @@ No existe registro publico.
 - `repair_status_history` conserva de forma append-only la reparacion, estado
   anterior nullable, estado nuevo, actor, timestamp y nota/razon opcional. La
   aplicacion y un trigger de PostgreSQL impiden modificar o borrar entradas.
-- Esta fundacion no agrega rutas de alta, actualizacion, transicion, cobro ni
-  entrega; esos contratos se incorporaran en unidades posteriores de la fase.
+- `GET /repairs` mantiene lectura global para todos los usuarios autenticados y
+  acepta el filtro opcional `status`, ademas de `limit` y `offset`.
+- `POST /repairs` requiere `Idempotency-Key` y una `branch_id` activa dentro del
+  alcance del usuario. Crea el folio `RP-SUC-AÑO-NÚMERO`, fuerza `status=received`
+  y agrega la entrada inicial de `repair_status_history` con el usuario actor en
+  la misma transaccion.
+- El alta prefiere `client_id`: debe identificar un cliente activo y
+  `client_name` se toma del registro canonico. Sin `client_id`, exige
+  `client_name` y `confirm_free_text_client=true`. Pieza y servicio no aceptan
+  texto vacio, `price` es nullable y no negativo, y `expected_at` no puede ser
+  anterior a `received_at`.
+- `PATCH /repairs/{repair_id}` solo permite modificar cliente, pieza, servicio,
+  precio, fechas de recepcion/esperada y notas, y exige alcance sobre la sucursal
+  operativa. No permite cambiar estado, sucursal, venta/pago, entrega, bloqueo ni
+  historial. Una reparacion entregada o bloqueada para revision responde `409`.
+- Estas rutas no implementan transiciones de estado, cobro ni entrega; esos
+  contratos se incorporaran en unidades posteriores de la fase.
 
 ## Errores
 
