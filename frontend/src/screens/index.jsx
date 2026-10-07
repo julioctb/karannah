@@ -2805,12 +2805,31 @@ function buildReportPreview(reportId, fromDate, toDate, branchId) {
   ];
 }
 
-function ReportModal({ report, onClose }) {
+function buildSalesSummaryPreview(summary) {
+  return [
+    {
+      label: "Importe vendido",
+      value: formatMoney(summary.totals.totalSold),
+    },
+    { label: "Operaciones", value: String(summary.totals.operationCount) },
+    {
+      label: "Ventas a crédito",
+      value: String(summary.totals.creditSaleCount),
+    },
+  ];
+}
+
+function ReportModal({ report, onClose, actions = {}, sucursales = [] }) {
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [branchId, setBranchId] = useState("");
   const [preview, setPreview] = useState(null);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const apiBackedSales =
+    report?.id === "sales" &&
+    typeof actions.getSalesSummaryReport === "function";
+  const branchOptions = apiBackedSales ? sucursales : SUCURSALES;
   useEffect(() => {
     if (report) {
       setFromDate("");
@@ -2818,10 +2837,11 @@ function ReportModal({ report, onClose }) {
       setBranchId("");
       setPreview(null);
       setError("");
+      setLoading(false);
     }
   }, [report?.id]);
   if (!report) return null;
-  const generate = (event) => {
+  const generate = async (event) => {
     event.preventDefault();
     const pattern = /^\d{4}-\d{2}-\d{2}$/;
     if (
@@ -2836,7 +2856,26 @@ function ReportModal({ report, onClose }) {
       return;
     }
     setError("");
-    setPreview(buildReportPreview(report.id, fromDate, toDate, branchId));
+    if (!apiBackedSales) {
+      setPreview(buildReportPreview(report.id, fromDate, toDate, branchId));
+      return;
+    }
+    setLoading(true);
+    setPreview(null);
+    try {
+      const summary = await actions.getSalesSummaryReport({
+        branchId: branchId || undefined,
+        dateFrom: fromDate || undefined,
+        dateTo: toDate || undefined,
+      });
+      setPreview(buildSalesSummaryPreview(summary));
+    } catch (requestError) {
+      setError(
+        requestError.message || "No se pudo cargar el reporte de ventas.",
+      );
+    } finally {
+      setLoading(false);
+    }
   };
   return React.createElement(
     AdminModalFrame,
@@ -2859,13 +2898,15 @@ function ReportModal({ report, onClose }) {
           { className: "client-policy-row" },
           React.createElement(
             "span",
-            { className: "pill pill-muted" },
-            "Demostración",
+            { className: `pill ${apiBackedSales ? "pill-accent" : "pill-muted"}` },
+            apiBackedSales ? "API local" : "Demostración",
           ),
           React.createElement(
             "span",
             null,
-            "La vista previa utiliza únicamente los datos disponibles dentro de este prototipo.",
+            apiBackedSales
+              ? "La vista previa consulta las ventas confirmadas dentro del alcance seleccionado."
+              : "La vista previa utiliza únicamente los datos disponibles dentro de este prototipo.",
           ),
         ),
         React.createElement(
@@ -2933,16 +2974,23 @@ function ReportModal({ report, onClose }) {
                 { value: "" },
                 "Todas las sucursales",
               ),
-              SUCURSALES.map((branch) =>
-                React.createElement(
+              branchOptions.map((branch) => {
+                const optionId = branch.uuid || branch.id;
+                return React.createElement(
                   "option",
-                  { key: branch.id, value: branch.id },
+                  { key: optionId, value: optionId },
                   branch.nombre,
-                ),
-              ),
+                );
+              }),
             ),
           ),
         ),
+        loading &&
+          React.createElement(
+            "div",
+            { className: "api-read-only-notice", role: "status" },
+            "Cargando reporte…",
+          ),
         error &&
           React.createElement(
             "div",
@@ -3018,9 +3066,16 @@ function ReportModal({ report, onClose }) {
             "data-od-id": "generate-report-cta",
             type: "submit",
             className: "btn-primary",
+            disabled: loading,
             style: { minHeight: 44 },
           },
-          preview ? "Actualizar reporte" : "Generar reporte",
+          loading
+            ? "Cargando…"
+            : error && apiBackedSales
+              ? "Reintentar"
+              : preview
+                ? "Actualizar reporte"
+                : "Generar reporte",
         ),
       ),
     ),
@@ -10467,7 +10522,7 @@ function PromotionsView() {
     ),
   );
 }
-function ReportsView() {
+function ReportsView({ actions = {}, sucursales = [] }) {
   const [selectedReport, setSelectedReport] = useState(null);
   return React.createElement(
     MainLayout,
@@ -10476,6 +10531,8 @@ function ReportsView() {
       actions: React.createElement(ReportModal, {
         report: selectedReport,
         onClose: () => setSelectedReport(null),
+        actions,
+        sucursales,
       }),
     },
     React.createElement(

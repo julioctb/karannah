@@ -85,14 +85,27 @@ Start with the recommended first slice: server-side reports by business date and
 
 ### F7-02 — Connect selected report frontend to API
 
-- [ ] Add frontend API adapter and mapper for the selected report.
-- [ ] Replace local/demo report calculations for that report with server data.
-- [ ] Preserve existing Spanish UI copy and loading/error states.
-- [ ] Build frontend production bundle.
+- [x] Add frontend API adapter and mapper for the selected report.
+- [x] Replace local/demo report calculations for that report with server data.
+- [x] Preserve existing Spanish UI copy and loading/error states.
+- [x] Build frontend production bundle.
 - Route: delegated writer.
-- Candidate surfaces: to be refined by F7-00/F7-01.
+- Surfaces: `frontend/src/lib/api.js`, `frontend/src/App.jsx`,
+  `frontend/src/domain/appModel.js`, `frontend/src/screens/index.jsx`,
+  `frontend/README.md`, and this task file.
 - Checks: frontend production build plus focused structural spot-checks.
-- Evidence: pending.
+- Evidence:
+  - Added the authenticated sales-summary adapter with the same `URLSearchParams`
+    filter style and request/error conventions as credit recovery.
+  - The sales report now uses server totals and authorized `sucursales`; other
+    report previews retain their isolated demo behavior.
+  - Preserved date validation and Spanish preview metrics while adding API loading,
+    error, and retry states.
+  - Strict TDD was not active because no frontend test runner is configured.
+  - `cd frontend && npm run build` → passed; Vite retained the pre-existing
+    invalid `/* @__PURE__ */` annotation warning at `src/screens/index.jsx:4522`.
+  - Native review approved and was acknowledged under lineage `review-5ae09ea17ebfc540` for target `sha256:08ceed9cf48cdeae2c73ecede4569210c09d8c187ec2347e3c69226052f4df8f`; advisory `R3-sales-report-stale-response` at `frontend/src/screens/index.jsx:2864-2877` was informational/non-blocking.
+  - Work-unit commit was created as `feat(frontend): connect sales summary report`; final amended identity is reported in session output because a commit cannot contain its own final hash.
 
 ### F7-03 — Persistent configuration foundations
 

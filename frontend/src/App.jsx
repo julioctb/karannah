@@ -36,6 +36,7 @@ import {
   getPhysicalCounts,
   getReadModel,
   getSaleDetail,
+  getSalesSummaryReport,
   getTransferDetail,
   getTransfers,
   openCashSession,
@@ -264,6 +265,8 @@ export default function App() {
       getClientCreditLedger(token, clientId, options, signal),
     getCreditRecoveryReport: (options, signal) =>
       getCreditRecoveryReport(token, options, signal),
+    getSalesSummaryReport: (options, signal) =>
+      getSalesSummaryReport(token, options, signal),
     getSaleDetail: (saleId, signal) =>
       getSaleDetail(token, saleId, user.branches || [], signal),
     getTransfers: (signal) =>

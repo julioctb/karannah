@@ -27,7 +27,9 @@ Repairs support persisted intake, intake-field updates, validated service-state
 transitions, and charging through a real sale; intake and charge retries preserve
 their idempotency key after uncertain network failures. Delivery remains read-only
 until the backend exposes a delivery endpoint. Transfer and physical-count screens
-also provide persisted API-backed operational workflows. Promotions, reports, and
+also provide persisted API-backed operational workflows. The sales-period report
+uses the authenticated `GET /reports/sales-summary` endpoint with authorized branch
+and business-date filters; the remaining report previews, promotions, and
 configuration retain isolated demo data until their corresponding slices. Supabase
 will be introduced in Phase 9 and used only for authentication.
 

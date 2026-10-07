@@ -210,6 +210,19 @@ function mapSaleDetail(row, branchById) {
   };
 }
 
+function mapSalesSummaryReport(row) {
+  return {
+    branchId: row.branch_id,
+    dateFrom: row.date_from,
+    dateTo: row.date_to,
+    totals: {
+      totalSold: Number(row.totals.total_sold),
+      operationCount: row.totals.operation_count,
+      creditSaleCount: row.totals.credit_sale_count,
+    },
+  };
+}
+
 function mapCreditRecoveryReport(row) {
   return {
     branchId: row.branch_id,
@@ -778,6 +791,18 @@ export function getClientCreditLedger(token, clientId, { limit = 100, offset = 0
     `/clients/${clientId}/credit-ledger?limit=${limit}&offset=${offset}`,
     { token, signal },
   );
+}
+
+export function getSalesSummaryReport(token, options = {}, signal) {
+  const params = new URLSearchParams();
+  if (options.branchId) params.set("branch_id", options.branchId);
+  if (options.dateFrom) params.set("date_from", options.dateFrom);
+  if (options.dateTo) params.set("date_to", options.dateTo);
+  const query = params.toString();
+  return request(`/reports/sales-summary${query ? `?${query}` : ""}`, {
+    token,
+    signal,
+  }).then(mapSalesSummaryReport);
 }
 
 export function getCreditRecoveryReport(token, options = {}, signal) {
