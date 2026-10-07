@@ -171,6 +171,12 @@ No existe registro publico.
 
 ## Reportes
 
+- `GET /reports/sales-summary` requiere `admin` o `encargado` y devuelve
+  `total_sold`, `operation_count` y `credit_sale_count` para ventas confirmadas;
+  las canceladas se excluyen y el importe proviene de `Sale.total`, no de pagos.
+- Acepta `branch_id`, `date_from` y `date_to`. El periodo es inclusivo por día
+  comercial en `BUSINESS_TIMEZONE` (`[inicio, día siguiente)`) y solo incluye
+  sucursales visibles. Un `branch_id` fuera del alcance devuelve totales en cero.
 - `GET /reports/credit-recovery` requiere `admin` o `encargado` y devuelve el
   saldo actual de clientes con deuda, cargos y recuperaciones del periodo,
   último abono y totales agregados.

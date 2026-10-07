@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Annotated
 from zoneinfo import ZoneInfo
@@ -16,7 +16,12 @@ from app.core.config import get_settings
 from app.core.db import get_db
 from app.models.clients import Client, CreditEntry, CreditMovementType
 from app.models.identity import Role, UserProfile
-from app.schemas.reports import CreditRecoveryReportRead, CreditRecoveryReportRow
+from app.models.sales import Sale, SaleCondition, SaleStatus
+from app.schemas.reports import (
+    CreditRecoveryReportRead,
+    CreditRecoveryReportRow,
+    SalesSummaryReportRead,
+)
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -27,7 +32,8 @@ Profile = Annotated[UserProfile, Depends(get_current_profile)]
 def _day_bounds(day: date) -> tuple[datetime, datetime]:
     timezone = ZoneInfo(get_settings().business_timezone)
     start = datetime.combine(day, time.min, tzinfo=timezone)
-    return start, start + timedelta(days=1)
+    next_day = start + timedelta(days=1)
+    return start.astimezone(UTC), next_day.astimezone(UTC)
 
 
 def _movement_scope(
@@ -36,6 +42,61 @@ def _movement_scope(
     if branch_id is not None:
         return CreditEntry.branch_id == branch_id
     return or_(CreditEntry.branch_id.in_(branch_ids), CreditEntry.branch_id.is_(None))
+
+
+@router.get("/sales-summary", response_model=SalesSummaryReportRead)
+async def sales_summary_report(
+    db: Db,
+    profile: Profile,
+    branch_id: Annotated[uuid.UUID | None, Query()] = None,
+    date_from: Annotated[date | None, Query()] = None,
+    date_to: Annotated[date | None, Query()] = None,
+) -> SalesSummaryReportRead:
+    ensure_role(profile, Role.ADMIN, Role.ENCARGADO)
+    if date_from is not None and date_to is not None and date_from > date_to:
+        raise HTTPException(status_code=422, detail="date_from no puede ser posterior a date_to")
+
+    branch_ids = await visible_branch_ids(db, profile)
+    if (branch_id is not None and branch_id not in branch_ids) or not branch_ids:
+        return SalesSummaryReportRead(
+            branch_id=branch_id,
+            date_from=date_from,
+            date_to=date_to,
+            totals={"total_sold": Decimal(0), "operation_count": 0, "credit_sale_count": 0},
+        )
+
+    scope = [
+        Sale.status == SaleStatus.CONFIRMADA,
+        Sale.branch_id == branch_id if branch_id is not None else Sale.branch_id.in_(branch_ids),
+    ]
+    if date_from is not None:
+        start, _ = _day_bounds(date_from)
+        scope.append(Sale.created_at >= start)
+    if date_to is not None:
+        _, next_day = _day_bounds(date_to)
+        scope.append(Sale.created_at < next_day)
+
+    totals = (
+        await db.execute(
+            select(
+                func.coalesce(func.sum(Sale.total), 0).label("total_sold"),
+                func.count(Sale.id).label("operation_count"),
+                func.coalesce(
+                    func.sum(case((Sale.condition == SaleCondition.CREDITO, 1), else_=0)), 0
+                ).label("credit_sale_count"),
+            ).where(*scope)
+        )
+    ).one()
+    return SalesSummaryReportRead(
+        branch_id=branch_id,
+        date_from=date_from,
+        date_to=date_to,
+        totals={
+            "total_sold": Decimal(totals.total_sold or 0),
+            "operation_count": int(totals.operation_count or 0),
+            "credit_sale_count": int(totals.credit_sale_count or 0),
+        },
+    )
 
 
 @router.get("/credit-recovery", response_model=CreditRecoveryReportRead)

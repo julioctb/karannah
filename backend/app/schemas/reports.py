@@ -7,6 +7,19 @@ from decimal import Decimal
 from pydantic import BaseModel
 
 
+class SalesSummaryTotals(BaseModel):
+    total_sold: Decimal
+    operation_count: int
+    credit_sale_count: int
+
+
+class SalesSummaryReportRead(BaseModel):
+    branch_id: uuid.UUID | None
+    date_from: date | None
+    date_to: date | None
+    totals: SalesSummaryTotals
+
+
 class CreditRecoveryReportRow(BaseModel):
     client_id: int
     client_name: str

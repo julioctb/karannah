@@ -30,7 +30,7 @@ from app.models.clients import Client, ClientType, CreditEntry, CreditMovementTy
 from app.models.identity import Branch, Role, UserBranchAssignment, UserProfile
 from app.models.inventory import StockBalance, StockEntry, StockMovementType
 from app.models.repairs import Repair, RepairStatus
-from app.models.sales import PaymentMethod, Sale, SaleCondition, SaleType
+from app.models.sales import PaymentMethod, Sale, SaleCondition, SaleStatus, SaleType
 from app.services.pos import stock_balance_lock_statement
 
 ADMIN_ID = uuid.uuid4()
@@ -978,6 +978,96 @@ async def test_credit_recovery_report_returns_outstanding_balances_and_period_to
         params={"date_from": "2025-04-01", "date_to": "2025-03-01"},
     )
     assert invalid_dates.status_code == 422
+
+
+async def test_sales_summary_counts_confirmed_sales_by_commercial_day(client, session_factory):
+    async with session_factory() as session:
+        session.add_all(
+            [
+                Sale(
+                    folio="V-BOUNDARY-BEFORE",
+                    branch_id=BRANCH_IDS["T01"],
+                    client_id=None,
+                    sale_type=SaleType.MENUDEO,
+                    condition=SaleCondition.CONTADO,
+                    payment_method=PaymentMethod.EFECTIVO,
+                    total=50.0,
+                    created_at=datetime(2025, 3, 10, 5, 59, tzinfo=UTC),
+                ),
+                Sale(
+                    folio="V-BOUNDARY-INCLUDED",
+                    branch_id=BRANCH_IDS["T01"],
+                    client_id=1,
+                    sale_type=SaleType.MENUDEO,
+                    condition=SaleCondition.CREDITO,
+                    payment_method=PaymentMethod.CREDITO,
+                    total=75.0,
+                    created_at=datetime(2025, 3, 10, 6, 0, tzinfo=UTC),
+                ),
+                Sale(
+                    folio="V-CANCELLED",
+                    branch_id=BRANCH_IDS["T01"],
+                    client_id=None,
+                    sale_type=SaleType.MENUDEO,
+                    condition=SaleCondition.CONTADO,
+                    status=SaleStatus.CANCELADA,
+                    payment_method=PaymentMethod.EFECTIVO,
+                    total=999.0,
+                    created_at=datetime(2025, 3, 10, 18, 0, tzinfo=UTC),
+                ),
+            ]
+        )
+        await session.commit()
+
+    response = await client.get(
+        "/api/v1/reports/sales-summary",
+        params={"date_from": "2025-03-10", "date_to": "2025-03-10"},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json() == {
+        "branch_id": None,
+        "date_from": "2025-03-10",
+        "date_to": "2025-03-10",
+        "totals": {
+            "total_sold": "1875.00",
+            "operation_count": 2,
+            "credit_sale_count": 2,
+        },
+    }
+
+
+async def test_sales_summary_scopes_branches_and_rejects_vendedor(client):
+    app.dependency_overrides[get_current_claims] = as_encargado
+    visible = await client.get("/api/v1/reports/sales-summary")
+    assert visible.status_code == 200, visible.text
+    assert visible.json()["totals"] == {
+        "total_sold": "2700.00",
+        "operation_count": 2,
+        "credit_sale_count": 1,
+    }
+
+    unauthorized = await client.get(
+        "/api/v1/reports/sales-summary",
+        params={"branch_id": str(BRANCH_IDS["T02"])},
+    )
+    assert unauthorized.status_code == 200
+    assert unauthorized.json()["totals"] == {
+        "total_sold": "0",
+        "operation_count": 0,
+        "credit_sale_count": 0,
+    }
+
+    app.dependency_overrides[get_current_claims] = as_vendedor
+    forbidden = await client.get("/api/v1/reports/sales-summary")
+    assert forbidden.status_code == 403
+
+
+async def test_sales_summary_rejects_inverted_period(client):
+    response = await client.get(
+        "/api/v1/reports/sales-summary",
+        params={"date_from": "2025-04-01", "date_to": "2025-03-01"},
+    )
+    assert response.status_code == 422
 
 
 async def test_sale_cancellation_reverses_stock_payment_cash_and_is_idempotent(client):
