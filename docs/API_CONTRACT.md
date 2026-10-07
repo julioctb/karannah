@@ -245,8 +245,18 @@ No existe registro publico.
   precio, fechas de recepcion/esperada y notas, y exige alcance sobre la sucursal
   operativa. No permite cambiar estado, sucursal, venta/pago, entrega, bloqueo ni
   historial. Una reparacion entregada o bloqueada para revision responde `409`.
-- Estas rutas no implementan transiciones de estado, cobro ni entrega; esos
-  contratos se incorporaran en unidades posteriores de la fase.
+- `POST /repairs/{repair_id}/transition` recibe `to_status` y una `note` opcional.
+  Exige alcance sobre la sucursal operativa y acepta unicamente `received` →
+  `in_workshop` → `ready`. La reapertura `ready` → `in_workshop` tambien se
+  permite, pero exige una nota/razon no vacia. Transiciones hacia atras, saltos,
+  repeticiones del mismo estado, reparaciones entregadas y reparaciones bloqueadas
+  para revision responden `409`; un destino fuera del vocabulario responde `422`.
+- Cada transicion aceptada actualiza el estado y agrega en la misma transaccion
+  una fila inmutable con `from_status`, `to_status`, `actor_id` y `note`. La
+  primera llegada a `ready` establece `completed_at`; las reaperturas conservan
+  esa fecha. Cambiar el servicio a `ready` no cobra, no marca pago y no entrega.
+- Estas rutas no implementan cobro, entrega, cancelacion de venta ni reactivacion
+  de reparaciones bloqueadas; esos contratos corresponden a unidades posteriores.
 
 ## Errores
 

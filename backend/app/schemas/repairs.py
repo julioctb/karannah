@@ -62,6 +62,20 @@ class RepairUpdate(BaseModel):
         return value.strip() if isinstance(value, str) else value
 
 
+class RepairTransition(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    to_status: RepairStatus
+    note: str | None = Field(default=None, max_length=500)
+
+    @field_validator("note", mode="before")
+    @classmethod
+    def normalize_note(cls, value: Any) -> Any:
+        if not isinstance(value, str):
+            return value
+        return value.strip() or None
+
+
 class RepairRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

@@ -6,7 +6,7 @@
 - Route: organic development (ODD), delegated implementation per work unit
 - Repository branch at creation: `feature/phase-5-transfers-counts`
 - Active feature branch: `feature/phase-6-repairs`
-- Next task: `F6-03 — Implement status transitions and immutable history`
+- Next task: `F6-04 — Charge repairs through real sales`
 - Delivery strategy: `ask-on-risk`
 - Chain strategy: unset
 - Engram mirror: active
@@ -136,12 +136,12 @@ None currently known. If implementation exposes a new edge case, pause and resol
 
 ### F6-03 — Implement status transitions and immutable history
 
-- [ ] Add explicit status-transition endpoint(s).
-- [ ] Enforce allowed transitions and immutable history append behavior.
-- [ ] Keep completed, paid, and delivered states separate.
-- [ ] Reject delivery until payment evidence exists.
-- [ ] Add transition/history tests including invalid transitions.
-- [ ] Update API contract.
+- [x] Add explicit status-transition endpoint(s).
+- [x] Enforce allowed transitions and immutable history append behavior.
+- [x] Keep completed, paid, and delivered states separate.
+- [x] Reject transitions for delivered and blocked-for-review repairs.
+- [x] Add transition/history tests including invalid transitions.
+- [x] Update API contract.
 - Route: delegated writer.
 - Candidate surfaces:
   - `backend/app/api/v1/repairs.py`
@@ -150,7 +150,24 @@ None currently known. If implementation exposes a new edge case, pause and resol
   - `backend/tests/test_*repair*.py` or focused domain API tests
   - `docs/API_CONTRACT.md`
 - Checks: focused backend repair tests, full backend tests, Ruff.
-- Evidence: pending.
+- Evidence:
+  - Strict TDD RED: focused repair tests failed `3 failed, 9 passed` because
+    `POST /api/v1/repairs/{repair_id}/transition` did not exist and returned 404.
+  - Added `POST /repairs/{repair_id}/transition`, scoped to the actor's visible
+    branches while preserving global list reads.
+  - The service permits `received` → `in_workshop` → `ready` and reasoned
+    `ready` → `in_workshop`; it rejects no-op, skipped/backward, delivered, and
+    blocked-for-review transitions without appending history.
+  - Every accepted transition locks and updates the repair and appends
+    `RepairStatusHistory` with old/new status, actor, and normalized note in the
+    route transaction. First readiness sets `completed_at`; reopening retains it
+    and does not change sale, payment, delivery, or review-block state.
+  - Focused GREEN: `cd backend && .venv/bin/pytest -q tests/test_repairs_phase6.py`
+    → 12 passed in 0.67s.
+  - Regression checks: repair/domain/seed selection → 55 passed in 2.49s; full
+    backend → 148 passed in 4.59s; Ruff → all checks passed.
+  - Native assessment reported medium risk under budget; native review approved and was acknowledged under lineage `review-ee7cd428f97556e4` for target `sha256:e93c4ceaac3714750fbbbeb64da81e916737c706a84833652687ce818c89e269`.
+  - Work-unit commit was created as `feat(repairs): add status transitions`; final amended identity is reported in session output because a commit cannot contain its own final hash.
 
 ### F6-04 — Charge repairs through real sales
 

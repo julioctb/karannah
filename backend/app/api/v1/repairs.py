@@ -15,8 +15,9 @@ from app.api.pagination import PaginationParams
 from app.core.db import get_db
 from app.models.identity import UserProfile
 from app.models.repairs import Repair, RepairStatus
-from app.schemas.repairs import RepairCreate, RepairRead, RepairUpdate
+from app.schemas.repairs import RepairCreate, RepairRead, RepairTransition, RepairUpdate
 from app.services.repairs import create_repair as create_repair_service
+from app.services.repairs import transition_repair as transition_repair_service
 from app.services.repairs import update_repair as update_repair_service
 
 router = APIRouter(prefix="/repairs", tags=["repairs"])
@@ -68,5 +69,20 @@ async def update_repair(
 ) -> RepairRead:
     branch_ids = await visible_branch_ids(db, profile)
     result = await update_repair_service(db, repair_id, payload, branch_ids)
+    await db.commit()
+    return result
+
+
+@router.post("/{repair_id}/transition", response_model=RepairRead)
+async def transition_repair(
+    repair_id: int,
+    payload: RepairTransition,
+    db: Db,
+    profile: Profile,
+) -> RepairRead:
+    branch_ids = await visible_branch_ids(db, profile)
+    result = await transition_repair_service(
+        db, repair_id, payload, profile, branch_ids
+    )
     await db.commit()
     return result

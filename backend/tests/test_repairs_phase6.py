@@ -323,7 +323,7 @@ def test_phase6_migration_downgrade_clears_default_and_removes_append_only_objec
     )
 
 
-def test_api_contract_documents_repair_foundations_without_future_endpoints():
+def test_api_contract_documents_repair_foundations_and_transitions():
     contract = Path(__file__).resolve().parents[2].joinpath("docs", "API_CONTRACT.md").read_text()
 
     for text in (
@@ -345,6 +345,10 @@ def test_api_contract_documents_repair_foundations_without_future_endpoints():
         assert text in contract
 
     repair_section = contract.split("## Reparaciones", 1)[1].split("## ", 1)[0]
+    assert "POST /repairs/{repair_id}/transition" in repair_section
+    assert "ready` → `in_workshop" in repair_section
+    assert "nota/razon no vacia" in repair_section
+    assert "no cobra, no marca pago y no entrega" in repair_section
     assert "enviado" not in repair_section
     assert "cost" not in repair_section
 
@@ -551,3 +555,203 @@ async def test_repairs_are_globally_readable_but_hidden_branch_is_not_mutable(
             f"/api/v1/repairs/{hidden_id}", json={"notes": "Sin alcance"}
         )
     ).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_repair_status_transition_lifecycle_appends_actor_history_atomically(
+    repair_client, repair_session_factory
+):
+    created = await repair_client.post(
+        "/api/v1/repairs",
+        json=_intake_payload(),
+        headers={"Idempotency-Key": "repair-transition-lifecycle"},
+    )
+    repair_id = created.json()["id"]
+
+    started = await repair_client.post(
+        f"/api/v1/repairs/{repair_id}/transition",
+        json={"to_status": "in_workshop", "note": "  Inicia diagnostico  "},
+    )
+    assert started.status_code == 200, started.text
+    assert started.json()["status"] == "in_workshop"
+    assert started.json()["completed_at"] is None
+
+    ready = await repair_client.post(
+        f"/api/v1/repairs/{repair_id}/transition",
+        json={"to_status": "ready", "note": "Trabajo concluido"},
+    )
+    assert ready.status_code == 200, ready.text
+    assert ready.json()["status"] == "ready"
+    assert ready.json()["completed_at"] is not None
+
+    reopened = await repair_client.post(
+        f"/api/v1/repairs/{repair_id}/transition",
+        json={"to_status": "in_workshop", "note": "Cliente reporta ajuste pendiente"},
+    )
+    assert reopened.status_code == 200, reopened.text
+    assert reopened.json()["status"] == "in_workshop"
+    assert reopened.json()["completed_at"] == ready.json()["completed_at"]
+
+    ready_again = await repair_client.post(
+        f"/api/v1/repairs/{repair_id}/transition",
+        json={"to_status": "ready"},
+    )
+    assert ready_again.status_code == 200, ready_again.text
+    assert ready_again.json()["completed_at"] == ready.json()["completed_at"]
+
+    async with repair_session_factory() as session:
+        repair = await session.get(models.Repair, repair_id)
+        history = list(
+            (
+                await session.scalars(
+                    select(models.RepairStatusHistory)
+                    .where(models.RepairStatusHistory.repair_id == repair_id)
+                    .order_by(models.RepairStatusHistory.created_at, models.RepairStatusHistory.id)
+                )
+            ).all()
+        )
+        assert repair is not None
+        assert repair.status == models.RepairStatus.READY
+        assert repair.sale_id is None
+        assert repair.delivered_at is None
+        assert repair.blocked_for_review is False
+        assert len(history) == 5
+        assert {
+            (row.from_status, row.to_status, row.note) for row in history
+        } == {
+            (None, models.RepairStatus.RECEIVED, None),
+            (
+                models.RepairStatus.RECEIVED,
+                models.RepairStatus.IN_WORKSHOP,
+                "Inicia diagnostico",
+            ),
+            (
+                models.RepairStatus.IN_WORKSHOP,
+                models.RepairStatus.READY,
+                "Trabajo concluido",
+            ),
+            (
+                models.RepairStatus.READY,
+                models.RepairStatus.IN_WORKSHOP,
+                "Cliente reporta ajuste pendiente",
+            ),
+            (models.RepairStatus.IN_WORKSHOP, models.RepairStatus.READY, None),
+        }
+        assert {row.actor_id for row in history} == {SELLER_ID}
+
+
+@pytest.mark.asyncio
+async def test_repair_status_transition_rejects_invalid_noop_and_missing_reopen_reason(
+    repair_client, repair_session_factory
+):
+    created = await repair_client.post(
+        "/api/v1/repairs",
+        json=_intake_payload(),
+        headers={"Idempotency-Key": "repair-transition-invalid"},
+    )
+    repair_id = created.json()["id"]
+
+    invalid_requests = [
+        ({"to_status": "ready"}, 409),
+        ({"to_status": "received"}, 409),
+        ({"to_status": "unknown"}, 422),
+    ]
+    for payload, expected_status in invalid_requests:
+        response = await repair_client.post(
+            f"/api/v1/repairs/{repair_id}/transition", json=payload
+        )
+        assert response.status_code == expected_status, (payload, response.text)
+
+    assert (
+        await repair_client.post(
+            f"/api/v1/repairs/{repair_id}/transition",
+            json={"to_status": "in_workshop"},
+        )
+    ).status_code == 200
+    assert (
+        await repair_client.post(
+            f"/api/v1/repairs/{repair_id}/transition",
+            json={"to_status": "received"},
+        )
+    ).status_code == 409
+    assert (
+        await repair_client.post(
+            f"/api/v1/repairs/{repair_id}/transition", json={"to_status": "ready"}
+        )
+    ).status_code == 200
+
+    for missing_reason in (None, "", "   "):
+        response = await repair_client.post(
+            f"/api/v1/repairs/{repair_id}/transition",
+            json={"to_status": "in_workshop", "note": missing_reason},
+        )
+        assert response.status_code == 422, response.text
+
+    async with repair_session_factory() as session:
+        history = list(
+            (
+                await session.scalars(
+                    select(models.RepairStatusHistory).where(
+                        models.RepairStatusHistory.repair_id == repair_id
+                    )
+                )
+            ).all()
+        )
+        assert len(history) == 3
+
+
+@pytest.mark.asyncio
+async def test_repair_status_transition_rejects_hidden_delivered_and_blocked_repairs(
+    repair_client, repair_session_factory
+):
+    async with repair_session_factory() as session:
+        hidden = models.Repair(
+            folio="RP-T02-2026-000002",
+            branch_id=BRANCH_T02,
+            client_name="Oculta",
+            product_description="Cadena",
+            service="Soldadura",
+            status=models.RepairStatus.RECEIVED,
+            received_at=date(2026, 3, 1),
+        )
+        delivered = models.Repair(
+            folio="RP-T01-2026-000002",
+            branch_id=BRANCH_T01,
+            client_name="Entregada",
+            product_description="Anillo",
+            service="Pulido",
+            status=models.RepairStatus.READY,
+            received_at=date(2026, 3, 1),
+            delivered_at=datetime(2026, 3, 5, tzinfo=UTC),
+        )
+        blocked = models.Repair(
+            folio="RP-T01-2026-000003",
+            branch_id=BRANCH_T01,
+            client_name="Bloqueada",
+            product_description="Pulsera",
+            service="Ajuste",
+            status=models.RepairStatus.RECEIVED,
+            received_at=date(2026, 3, 1),
+            blocked_for_review=True,
+        )
+        session.add_all([hidden, delivered, blocked])
+        await session.commit()
+        ids = hidden.id, delivered.id, blocked.id
+
+    hidden_response = await repair_client.post(
+        f"/api/v1/repairs/{ids[0]}/transition", json={"to_status": "in_workshop"}
+    )
+    delivered_response = await repair_client.post(
+        f"/api/v1/repairs/{ids[1]}/transition",
+        json={"to_status": "in_workshop", "note": "No debe reabrir"},
+    )
+    blocked_response = await repair_client.post(
+        f"/api/v1/repairs/{ids[2]}/transition", json={"to_status": "in_workshop"}
+    )
+    assert hidden_response.status_code == 404
+    assert delivered_response.status_code == 409
+    assert blocked_response.status_code == 409
+
+    async with repair_session_factory() as session:
+        history = list((await session.scalars(select(models.RepairStatusHistory))).all())
+        assert history == []

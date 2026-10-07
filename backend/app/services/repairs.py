@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException
@@ -10,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.clients import Client
 from app.models.identity import Branch, UserProfile
 from app.models.repairs import Repair, RepairStatus, RepairStatusHistory
-from app.schemas.repairs import RepairCreate, RepairRead, RepairUpdate
+from app.schemas.repairs import RepairCreate, RepairRead, RepairTransition, RepairUpdate
 from app.services.inventory import idempotency_record, next_document_folio, request_hash
 
 _CREATE_ENDPOINT = "POST /repairs"
@@ -150,5 +151,65 @@ async def update_repair(
                 value = value or None
             setattr(repair, field, value)
 
+    await db.flush()
+    return _repair_read(repair)
+
+
+async def transition_repair(
+    db: AsyncSession,
+    repair_id: int,
+    payload: RepairTransition,
+    profile: UserProfile,
+    visible_branch_ids: list[uuid.UUID],
+) -> RepairRead:
+    repair = await db.scalar(
+        select(Repair)
+        .where(
+            Repair.id == repair_id,
+            Repair.branch_id.in_(visible_branch_ids),
+        )
+        .with_for_update()
+    )
+    if repair is None:
+        raise HTTPException(status_code=404, detail="Reparacion no encontrada")
+    if repair.delivered_at is not None:
+        raise HTTPException(status_code=409, detail="La reparacion ya fue entregada")
+    if repair.blocked_for_review:
+        raise HTTPException(status_code=409, detail="La reparacion requiere revision")
+
+    from_status = repair.status
+    to_status = payload.to_status
+    if from_status == to_status:
+        raise HTTPException(status_code=409, detail="La reparacion ya tiene ese estado")
+
+    allowed_transitions = {
+        RepairStatus.RECEIVED: {RepairStatus.IN_WORKSHOP},
+        RepairStatus.IN_WORKSHOP: {RepairStatus.READY},
+        RepairStatus.READY: {RepairStatus.IN_WORKSHOP},
+    }
+    if to_status not in allowed_transitions[from_status]:
+        raise HTTPException(status_code=409, detail="Transicion de estado no permitida")
+    if (
+        from_status == RepairStatus.READY
+        and to_status == RepairStatus.IN_WORKSHOP
+        and payload.note is None
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="La reapertura de una reparacion lista requiere una razon",
+        )
+
+    repair.status = to_status
+    if to_status == RepairStatus.READY and repair.completed_at is None:
+        repair.completed_at = datetime.now(UTC).date()
+    db.add(
+        RepairStatusHistory(
+            repair_id=repair.id,
+            from_status=from_status,
+            to_status=to_status,
+            actor_id=profile.id,
+            note=payload.note,
+        )
+    )
     await db.flush()
     return _repair_read(repair)
