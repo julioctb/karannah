@@ -178,8 +178,8 @@ Start with the recommended first slice: server-side reports by business date and
 
 ## Closeout checklist
 
-- [ ] All selected Phase 7 work units complete or consciously deferred.
-- [ ] Backend tests, Ruff, and frontend build recorded where applicable.
-- [ ] `docs/PLAN.md` and `docs/CHANGELOG.md` updated.
-- [ ] Native review lifecycle handled when enabled for each candidate.
-- [ ] Work-unit commits recorded as evidence.
+- [x] All selected Phase 7 work units complete or consciously deferred.
+- [x] Backend tests, Ruff, and frontend build recorded where applicable.
+- [x] `docs/PLAN.md` and `docs/CHANGELOG.md` updated.
+- [x] Native review lifecycle handled when enabled for each candidate.
+- [x] Work-unit commits recorded as evidence.

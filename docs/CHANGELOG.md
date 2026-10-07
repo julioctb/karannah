@@ -1,5 +1,42 @@
 # Cambios recientes
 
+## 2026-10-07 — Cierre de Fase 7
+
+### Implementado
+
+- `GET /reports/sales-summary` calcula ventas netas por fecha comercial y
+  sucursales autorizadas, excluyendo ventas canceladas.
+- La pantalla de reportes consume el resumen de ventas desde la API.
+- La configuración de empresa persiste en backend con validaciones de RFC,
+  correo y teléfono; no depende de `localStorage`.
+- El motor de promociones agrega promociones globales de porcentaje para
+  ventas de menudeo, seleccionadas explícitamente en POS, no apilables con
+  descuento manual y revalidadas en checkout.
+- Las ventas guardan atribución y snapshot de promoción aplicada.
+- La administración de usuarios lista y edita perfiles existentes por API:
+  nombre, rol, estado activo y asignaciones de sucursal.
+- La administración de usuarios bloquea autoedición, conserva al menos un admin
+  activo y mantiene creación/invitación para la fase de Supabase Auth Admin.
+
+### Verificación
+
+- Backend: `184 passed` con `cd backend && .venv/bin/pytest -q`.
+- Backend: `cd backend && .venv/bin/ruff check --no-cache app tests alembic`
+  sin errores.
+- Frontend: `cd frontend && npm run build` correcto.
+- El build mantiene una advertencia no fatal preexistente sobre la anotación
+  `@__PURE__` en `src/screens/index.jsx:4522`.
+- Revisión nativa F7-05 aprobada y reconocida en lineage
+  `review-1b99f5fd54be9089`; F7-04 tuvo revisión nativa declinada para ese
+  candidato y fue cubierto por verificación independiente.
+
+### Pendiente
+
+- Promociones por línea/categoría/material/producto, 2x1/3x2 y regalos.
+- Creación/invitación de usuarios e integración Supabase Auth Admin en Fase 9.
+- Pruebas de concurrencia sobre PostgreSQL real para garantías de último admin
+  activo.
+
 ## 2026-10-06 — Cierre de Fase 6
 
 ### Implementado

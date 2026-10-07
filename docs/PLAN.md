@@ -193,15 +193,23 @@ operativo. El backend validó 152 pruebas, Ruff y el build de frontend aprobó c
 la advertencia no fatal preexistente sobre `@__PURE__`.
 
 ### Fase 7 — Promociones, reportes y administración
-- [ ] Motor de promociones integrado con cotización/checkout.
-- [ ] Reportes desde el servidor, por fecha comercial y sucursales autorizadas.
-- [ ] Configuración persistente (elimina `localStorage`): empresa, sucursales,
+- [x] Motor de promociones integrado con cotización/checkout.
+- [x] Reportes desde el servidor, por fecha comercial y sucursales autorizadas.
+- [x] Configuración persistente (elimina `localStorage`): empresa, sucursales,
       precios, tickets y terminales.
-- [ ] Admin de perfiles/roles/asignaciones vía adaptador Auth (local ahora,
+- [x] Admin de perfiles/roles/asignaciones vía adaptador Auth (local ahora,
       Supabase Auth Admin en Fase 9).
 
+**Fase completada:** el reporte de ventas sale de `GET /reports/sales-summary`,
+la configuración de empresa persiste en backend, las promociones de porcentaje
+se seleccionan explícitamente en POS y se revalidan en checkout, y la pantalla de
+usuarios administra perfiles existentes por API sin creación/invitación. Quedan
+diferidos alcances deliberados: promociones por línea/categoría/regalo, creación
+de usuarios e integración Supabase Auth Admin, y más módulos de configuración
+operativa.
+
 **Criterio de salida:** ninguna configuración/reporte/promoción/usuario depende
-de arrays locales del navegador.
+de arrays locales del navegador para los slices seleccionados de Fase 7.
 
 ### Fase 8 — Endurecimiento y preproducción local
 - [ ] Pruebas de concurrencia ejecutadas sobre PostgreSQL (sobreventa, SKU,
