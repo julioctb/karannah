@@ -6950,6 +6950,8 @@ function getRepairPaymentLabel(repair) {
   if (repair.paymentKnown === false)
     return { label: "Pago no disponible", tone: "muted" };
   if (repair.pagado) return { label: "Pagada", tone: "success" };
+  if (repair.saleId && repair.montoPagado > 0)
+    return { label: "Pago parcial", tone: "warning" };
   if (repair.costo > 0) return { label: "Por cobrar", tone: "warning" };
   return { label: "Costo pendiente", tone: "muted" };
 }
@@ -7108,23 +7110,31 @@ function RepairDatePicker({ value, onChange }) {
       ),
   );
 }
-function NewRepairModal({ open, clientes, onClose, onCreate }) {
+function NewRepairModal({ open, clientes, currentUser, onClose, onCreate }) {
   const [clientSearch, setClientSearch] = useState("");
   const [selectedClient, setSelectedClient] = useState(null);
+  const [selectedBranchId, setSelectedBranchId] = useState("");
   const [piece, setPiece] = useState("");
   const [service, setService] = useState("");
   const [estimatedDate, setEstimatedDate] = useState("");
   const [cost, setCost] = useState("");
   const [errors, setErrors] = useState({});
+  const [requestError, setRequestError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [idempotencyKey, setIdempotencyKey] = useState(null);
   useEffect(() => {
     if (!open) return void 0;
     setClientSearch("");
     setSelectedClient(null);
+    setSelectedBranchId(currentUser?.sucursal?.uuid || "");
     setPiece("");
     setService("");
     setEstimatedDate("");
     setCost("");
     setErrors({});
+    setRequestError("");
+    setSubmitting(false);
+    setIdempotencyKey(null);
     const handleEscape = (event) => {
       if (event.key === "Escape") onClose();
     };
@@ -7147,7 +7157,7 @@ function NewRepairModal({ open, clientes, onClose, onCreate }) {
     setClientSearch(client.nombre);
     setErrors((current) => ({ ...current, client: "" }));
   };
-  const submitRepair = (event) => {
+  const submitRepair = async (event) => {
     event.preventDefault();
     const exactClient =
       selectedClient ||
@@ -7171,14 +7181,31 @@ function NewRepairModal({ open, clientes, onClose, onCreate }) {
         "Ingresa un costo mayor que cero o d\xE9jalo pendiente.";
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
-    onCreate({
-      clienteId: exactClient.id,
-      cliente: exactClient.nombre,
-      pieza: piece.trim(),
-      servicio: service.trim(),
-      fechaEntrega: estimatedDate,
-      costo: parsedCost,
-    });
+    const key = idempotencyKey || crypto.randomUUID();
+    setIdempotencyKey(key);
+    setSubmitting(true);
+    setRequestError("");
+    try {
+      await onCreate(
+        {
+          branchId: selectedBranchId,
+          clienteId: exactClient.id,
+          cliente: exactClient.nombre,
+          pieza: piece.trim(),
+          servicio: service.trim(),
+          fechaRecepcion: getLocalISODate(),
+          fechaEntrega: estimatedDate,
+          costo: parsedCost,
+        },
+        key,
+      );
+      setIdempotencyKey(null);
+    } catch (error) {
+      if (error.status >= 400 && error.status < 500) setIdempotencyKey(null);
+      setRequestError(error.message || "No se pudo registrar la reparación.");
+    } finally {
+      setSubmitting(false);
+    }
   };
   return /* @__PURE__ */ React.createElement(
     "div",
@@ -7231,6 +7258,27 @@ function NewRepairModal({ open, clientes, onClose, onCreate }) {
         /* @__PURE__ */ React.createElement(
           "div",
           { className: "repair-form-grid" },
+          (currentUser?.sucursales || []).length > 1 &&
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { className: "repair-field repair-field-full" },
+              /* @__PURE__ */ React.createElement("label", { htmlFor: "repair-branch" }, "Sucursal *"),
+              /* @__PURE__ */ React.createElement(
+                "select",
+                {
+                  id: "repair-branch",
+                  value: selectedBranchId,
+                  onChange: (event) => setSelectedBranchId(event.target.value),
+                },
+                currentUser.sucursales.map((branch) =>
+                  /* @__PURE__ */ React.createElement(
+                    "option",
+                    { key: branch.uuid, value: branch.uuid },
+                    `${branch.id} · ${branch.nombre}`,
+                  ),
+                ),
+              ),
+            ),
           /* @__PURE__ */ React.createElement(
             "div",
             { className: "repair-field repair-field-full repair-client-field" },
@@ -7438,39 +7486,118 @@ function NewRepairModal({ open, clientes, onClose, onCreate }) {
             { type: "button", className: "btn-secondary", onClick: onClose },
             "Cancelar",
           ),
+          requestError &&
+            /* @__PURE__ */ React.createElement(
+              "span",
+              { className: "repair-form-error", role: "alert" },
+              requestError,
+            ),
           /* @__PURE__ */ React.createElement(
             "button",
             {
               "data-od-id": "save-new-repair-cta",
               type: "submit",
               className: "btn-primary",
+              disabled: submitting || !selectedBranchId,
             },
-            "Registrar reparaci\xF3n",
+            submitting ? "Registrando…" : "Registrar reparaci\xF3n",
           ),
         ),
       ),
     ),
   );
 }
-function RepairDetailModal({ repair, open, onClose, onUpdate }) {
+function RepairDetailModal({
+  repair,
+  open,
+  clientes,
+  currentUser,
+  actions,
+  onClose,
+  onUpdate,
+  onTransition,
+  onCharge,
+}) {
   const [cost, setCost] = useState("");
   const [serviceStatus, setServiceStatus] = useState("recibida");
+  const [transitionReason, setTransitionReason] = useState("");
   const [costError, setCostError] = useState("");
+  const [requestError, setRequestError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [charging, setCharging] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState("efectivo");
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [cashSession, setCashSession] = useState(null);
+  const [cashError, setCashError] = useState("");
+  const [chargeIdempotencyKey, setChargeIdempotencyKey] = useState(null);
   useEffect(() => {
     if (!open || !repair) return void 0;
     setCost(repair.costo || "");
     setServiceStatus(repair.estadoServicio || "recibida");
+    setTransitionReason("");
     setCostError("");
+    setRequestError("");
+    setSaving(false);
+    setCharging(false);
+    setPaymentMethod("efectivo");
+    setPaymentAmount(String(repair.saldo || repair.costo || ""));
+    setCashSession(null);
+    setCashError("");
+    setChargeIdempotencyKey(null);
     const handleEscape = (event) => {
       if (event.key === "Escape") onClose();
     };
     document.addEventListener("keydown", handleEscape);
     return () => document.removeEventListener("keydown", handleEscape);
-  }, [open, repair?.id, repair?.costo, repair?.estadoServicio]);
+  }, [open, repair?.id, repair?.costo, repair?.estadoServicio, repair?.saldo]);
+  useEffect(() => {
+    if (!open || !repair || repair.saleId || typeof actions?.getCashTerminals !== "function")
+      return undefined;
+    const controller = new AbortController();
+    let active = true;
+    const branch = (currentUser?.sucursales || []).find((item) =>
+      repair.codigo.startsWith(`RP-${item.id}-`),
+    );
+    setCashError("");
+    actions
+      .getCashTerminals(controller.signal)
+      .then((terminals) => {
+        if (!branch) throw new Error("No tienes acceso a la sucursal de esta reparación.");
+        const terminal = (terminals || []).find(
+          (item) => String(item.branch_id) === String(branch.uuid),
+        );
+        if (!terminal) throw new Error("No hay terminal disponible para esta reparación.");
+        return actions.getCurrentCashSession(terminal.id, controller.signal);
+      })
+      .then((session) => {
+        if (!active) return;
+        setCashSession(session);
+        if (!session) setCashError("Abre una sesión de caja en Punto de Venta antes de cobrar.");
+      })
+      .catch((error) => {
+        if (active && error.name !== "AbortError")
+          setCashError(error.message || "No se pudo consultar la caja.");
+      });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [open, repair?.id, repair?.saleId]);
   if (!open || !repair) return null;
   const urgency = getRepairUrgency(repair);
   const payment = getRepairPaymentLabel(repair);
-  const saveChanges = (event) => {
+  const client = clientes.find((item) => item.id === repair.clienteId);
+  const allowedStatuses = {
+    recibida: ["recibida", "en_reparacion"],
+    en_reparacion: ["en_reparacion", "lista"],
+    lista: ["lista", "en_reparacion"],
+  }[repair.estadoServicio] || [repair.estadoServicio];
+  const statusLabels = {
+    recibida: "Recibida",
+    en_reparacion: "En reparación",
+    lista: "Lista para entregar",
+  };
+  const saveChanges = async (event) => {
     event.preventDefault();
     const parsedCost = cost === "" ? null : Number(cost);
     if (
@@ -7480,8 +7607,59 @@ function RepairDetailModal({ repair, open, onClose, onUpdate }) {
       setCostError("Ingresa un costo mayor que cero o d\xE9jalo pendiente.");
       return;
     }
-    onUpdate(repair.id, { costo: parsedCost, estadoServicio: serviceStatus });
-    onClose();
+    if (
+      repair.estadoServicio === "lista" &&
+      serviceStatus === "en_reparacion" &&
+      !transitionReason.trim()
+    ) {
+      setRequestError("Indica la razón para reabrir la reparación.");
+      return;
+    }
+    setSaving(true);
+    setRequestError("");
+    try {
+      if (parsedCost !== repair.costo) await onUpdate(repair.id, { costo: parsedCost });
+      if (serviceStatus !== repair.estadoServicio)
+        await onTransition(repair.id, serviceStatus, transitionReason.trim() || null);
+      onClose();
+    } catch (error) {
+      setRequestError(error.message || "No se pudieron guardar los cambios.");
+    } finally {
+      setSaving(false);
+    }
+  };
+  const chargeNow = async () => {
+    const amount = Number(paymentAmount);
+    if (!cashSession) {
+      setRequestError(cashError || "Abre una sesión de caja antes de cobrar.");
+      return;
+    }
+    if (!Number.isFinite(amount) || amount !== repair.saldo) {
+      setRequestError("Por ahora el cobro desde reparaciones debe liquidar el saldo completo.");
+      return;
+    }
+    const key = chargeIdempotencyKey || crypto.randomUUID();
+    setChargeIdempotencyKey(key);
+    setCharging(true);
+    setRequestError("");
+    try {
+      await onCharge(
+        repair.id,
+        {
+          cashSessionId: cashSession.id,
+          saleType: client?.tipo === "mayoreo" ? "mayoreo" : "menudeo",
+          payments: [{ method: paymentMethod, amount }],
+        },
+        key,
+      );
+      setChargeIdempotencyKey(null);
+      onClose();
+    } catch (error) {
+      if (error.status >= 400 && error.status < 500) setChargeIdempotencyKey(null);
+      setRequestError(error.message || "No se pudo cobrar la reparación.");
+    } finally {
+      setCharging(false);
+    }
   };
   return /* @__PURE__ */ React.createElement(
     "div",
@@ -7600,10 +7778,19 @@ function RepairDetailModal({ repair, open, onClose, onUpdate }) {
             ),
             /* @__PURE__ */ React.createElement(
               "span",
+              { className: "pill pill-muted" },
+              statusLabels[repair.estadoServicio] || repair.estadoServicio,
+            ),
+            /* @__PURE__ */ React.createElement(
+              "span",
               {
                 className: `pill pill-${repair.entregado ? "success" : "muted"}`,
               },
-              repair.entregado ? "Entregada" : "Pendiente de entrega",
+              repair.entregado
+                ? "Entregada"
+                : repair.deliveryKnown === false
+                  ? "Entrega no disponible"
+                  : "Pendiente de entrega",
             ),
           ),
           /* @__PURE__ */ React.createElement(
@@ -7634,15 +7821,15 @@ function RepairDetailModal({ repair, open, onClose, onUpdate }) {
                   value: cost,
                   onChange: (event) => setCost(event.target.value),
                   placeholder: "Pendiente",
-                  disabled: repair.pagado,
+                  disabled: repair.saleId || repair.blockedForReview,
                 }),
               ),
               /* @__PURE__ */ React.createElement(
                 "span",
                 { className: "repair-field-help" },
-                repair.pagado
+                repair.saleId
                   ? "El costo queda bloqueado despu\xE9s del cobro."
-                  : `Se cobrar\xE1 en POS con el c\xF3digo ${repair.codigo}.`,
+                  : `Se cobrar\xE1 como venta con el c\xF3digo ${repair.codigo}.`,
               ),
               /* @__PURE__ */ React.createElement(
                 "span",
@@ -7665,26 +7852,117 @@ function RepairDetailModal({ repair, open, onClose, onUpdate }) {
                   "data-od-id": "repair-service-status-select",
                   value: serviceStatus,
                   onChange: (event) => setServiceStatus(event.target.value),
-                  disabled: repair.entregado,
+                  disabled: repair.entregado || repair.blockedForReview,
                 },
-                /* @__PURE__ */ React.createElement(
-                  "option",
-                  { value: "recibida" },
-                  "Recibida",
-                ),
-                /* @__PURE__ */ React.createElement(
-                  "option",
-                  { value: "en_reparacion" },
-                  "En reparaci\xF3n",
-                ),
-                /* @__PURE__ */ React.createElement(
-                  "option",
-                  { value: "lista" },
-                  "Lista para entregar",
+                allowedStatuses.map((status) =>
+                  /* @__PURE__ */ React.createElement(
+                    "option",
+                    { key: status, value: status },
+                    statusLabels[status],
+                  ),
                 ),
               ),
             ),
+            repair.estadoServicio === "lista" &&
+              serviceStatus === "en_reparacion" &&
+              /* @__PURE__ */ React.createElement(
+                "div",
+                { className: "repair-field repair-field-full" },
+                /* @__PURE__ */ React.createElement(
+                  "label",
+                  { htmlFor: "repair-transition-reason" },
+                  "Razón de reapertura *",
+                ),
+                /* @__PURE__ */ React.createElement("input", {
+                  id: "repair-transition-reason",
+                  value: transitionReason,
+                  onChange: (event) => setTransitionReason(event.target.value),
+                  placeholder: "Ej. Requiere un ajuste adicional",
+                }),
+              ),
           ),
+          repair.blockedForReview &&
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { className: "repair-ready-strip", role: "alert" },
+              /* @__PURE__ */ React.createElement(
+                "div",
+                null,
+                /* @__PURE__ */ React.createElement("strong", null, "Revisión requerida"),
+                /* @__PURE__ */ React.createElement(
+                  "span",
+                  null,
+                  "La reparación está bloqueada para revisión administrativa.",
+                ),
+              ),
+            ),
+          !repair.saleId && repair.costo > 0 && !repair.blockedForReview &&
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { className: "repair-ready-strip" },
+              /* @__PURE__ */ React.createElement(
+                "div",
+                null,
+                /* @__PURE__ */ React.createElement("strong", null, "Cobrar reparación"),
+                /* @__PURE__ */ React.createElement(
+                  "span",
+                  null,
+                  cashError || `Cobro único por el saldo completo: ${formatMoney(repair.saldo)}`,
+                ),
+                /* @__PURE__ */ React.createElement(
+                  "div",
+                  { style: { display: "flex", gap: 8, marginTop: 8 } },
+                  /* @__PURE__ */ React.createElement("input", {
+                    type: "number",
+                    min: repair.saldo,
+                    max: repair.saldo,
+                    step: "0.01",
+                    value: paymentAmount,
+                    readOnly: true,
+                    "aria-label": "Monto a cobrar",
+                    style: { minWidth: 0 },
+                  }),
+                  /* @__PURE__ */ React.createElement(
+                    "select",
+                    {
+                      value: paymentMethod,
+                      onChange: (event) => setPaymentMethod(event.target.value),
+                      "aria-label": "Método de pago",
+                    },
+                    /* @__PURE__ */ React.createElement("option", { value: "efectivo" }, "Efectivo"),
+                    /* @__PURE__ */ React.createElement("option", { value: "tarjeta" }, "Tarjeta"),
+                    /* @__PURE__ */ React.createElement("option", { value: "transferencia" }, "Transferencia"),
+                    client?.creditoActivo &&
+                      /* @__PURE__ */ React.createElement("option", { value: "credito" }, "Crédito"),
+                  ),
+                ),
+              ),
+              /* @__PURE__ */ React.createElement(
+                "button",
+                {
+                  type: "button",
+                  className: "btn-primary",
+                  disabled: charging || !cashSession,
+                  onClick: chargeNow,
+                },
+                charging ? "Cobrando…" : "Cobrar saldo",
+              ),
+            ),
+          repair.saleId && repair.saldo > 0 &&
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { className: "repair-ready-strip" },
+              /* @__PURE__ */ React.createElement(
+                "div",
+                null,
+                /* @__PURE__ */ React.createElement("strong", null, "Pago parcial registrado"),
+                /* @__PURE__ */ React.createElement(
+                  "span",
+                  null,
+                  `${formatMoney(repair.montoPagado)} pagados · ${formatMoney(repair.saldo)} pendientes`,
+                ),
+              ),
+            ),
           repair.pagado &&
             !repair.entregado &&
             /* @__PURE__ */ React.createElement(
@@ -7701,7 +7979,7 @@ function RepairDetailModal({ repair, open, onClose, onUpdate }) {
                 /* @__PURE__ */ React.createElement(
                   "span",
                   null,
-                  "La pieza ya puede marcarse como entregada.",
+                  "El backend aún no ofrece la acción de entrega; el pago queda confirmado.",
                 ),
               ),
               /* @__PURE__ */ React.createElement(
@@ -7710,15 +7988,10 @@ function RepairDetailModal({ repair, open, onClose, onUpdate }) {
                   "data-od-id": "mark-repair-delivered-control",
                   type: "button",
                   className: "btn-secondary",
-                  onClick: () => {
-                    onUpdate(repair.id, {
-                      entregado: true,
-                      fechaEntregaReal: getLocalISODate(),
-                    });
-                    onClose();
-                  },
+                  disabled: true,
+                  title: "La entrega estará disponible cuando exista el endpoint correspondiente.",
                 },
-                "Marcar entregada",
+                "Entrega pendiente",
               ),
             ),
         ),
@@ -7730,14 +8003,21 @@ function RepairDetailModal({ repair, open, onClose, onUpdate }) {
             { type: "button", className: "btn-secondary", onClick: onClose },
             "Cancelar",
           ),
+          requestError &&
+            /* @__PURE__ */ React.createElement(
+              "span",
+              { className: "repair-form-error", role: "alert" },
+              requestError,
+            ),
           /* @__PURE__ */ React.createElement(
             "button",
             {
               "data-od-id": "save-repair-detail-cta",
               type: "submit",
               className: "btn-primary",
+              disabled: saving || repair.blockedForReview,
             },
-            "Guardar cambios",
+            saving ? "Guardando…" : "Guardar cambios",
           ),
         ),
       ),
@@ -7747,8 +8027,12 @@ function RepairDetailModal({ repair, open, onClose, onUpdate }) {
 function RepairsView({
   clientes,
   reparaciones,
+  currentUser,
+  actions,
   registrarReparacion,
   actualizarReparacion,
+  cambiarEstadoReparacion,
+  cobrarReparacion,
 }) {
   const [showNewRepair, setShowNewRepair] = useState(false);
   const [selectedRepairId, setSelectedRepairId] = useState(null);
@@ -7793,8 +8077,8 @@ function RepairsView({
       (filter === "delivered" && repair.entregado);
     return matchesSearch && matchesFilter;
   });
-  const registerAndOpen = (data) => {
-    const created = registrarReparacion(data);
+  const registerAndOpen = async (data, idempotencyKey) => {
+    const created = await registrarReparacion(data, idempotencyKey);
     setShowNewRepair(false);
     setSelectedRepairId(created.id);
   };
@@ -8161,14 +8445,20 @@ function RepairsView({
     /* @__PURE__ */ React.createElement(NewRepairModal, {
       open: showNewRepair,
       clientes,
+      currentUser,
       onClose: () => setShowNewRepair(false),
       onCreate: registerAndOpen,
     }),
     /* @__PURE__ */ React.createElement(RepairDetailModal, {
       repair: selectedRepair,
       open: Boolean(selectedRepair),
+      clientes,
+      currentUser,
+      actions,
       onClose: () => setSelectedRepairId(null),
       onUpdate: actualizarReparacion,
+      onTransition: cambiarEstadoReparacion,
+      onCharge: cobrarReparacion,
     }),
   );
 }

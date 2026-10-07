@@ -16,6 +16,7 @@ export const API_WRITE_VIEWS = new Set([
   "clients",
   "credits",
   "sales",
+  "repairs",
   "transfers",
   "physicalcount",
 ]);
@@ -52,8 +53,9 @@ export function buildViewProps({
     updateClientCommercialProfile:
       actions.updateClientCommercialProfile || (() => false),
     currentUser,
-    registrarReparacion: () => null,
-    actualizarReparacion: () => false,
-    cobrarReparacion: () => false,
+    registrarReparacion: actions.createRepair || (() => null),
+    actualizarReparacion: actions.updateRepair || (() => false),
+    cambiarEstadoReparacion: actions.transitionRepair || (() => false),
+    cobrarReparacion: actions.chargeRepair || (() => false),
   };
 }

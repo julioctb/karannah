@@ -12,6 +12,7 @@ import {
   addVariant,
   checkoutSale,
   cancelSale,
+  chargeRepair,
   closeCashSession,
   createCategory,
   createClient,
@@ -22,6 +23,7 @@ import {
   createMaterial,
   createPhysicalCount,
   createProduct,
+  createRepair,
   createSubcategory,
   createTransfer,
   deleteProductImage,
@@ -40,6 +42,7 @@ import {
   quoteSale,
   receiveTransfer,
   sendTransfer,
+  transitionRepair,
   updateCategory,
   updateClient,
   updateClientCommercialProfile,
@@ -47,6 +50,7 @@ import {
   updateMaterial,
   updatePhysicalCountLines,
   updateProduct,
+  updateRepair,
   updateSubcategory,
   updateVariant,
   uploadProductImage,
@@ -100,7 +104,30 @@ export default function App() {
   const connected = API_READ_VIEWS.has(currentView);
   const writable = API_WRITE_VIEWS.has(currentView);
   const refresh = () => setReloadKey((value) => value + 1);
+  const replaceRepair = (repair) => {
+    setReadModel((current) => ({
+      ...current,
+      reparaciones: current.reparaciones.map((item) =>
+        item.id === repair.id ? repair : item,
+      ),
+    }));
+    return repair;
+  };
   const actions = {
+    createRepair: async (data, idempotencyKey) => {
+      const repair = await createRepair(token, data, idempotencyKey);
+      setReadModel((current) => ({
+        ...current,
+        reparaciones: [repair, ...current.reparaciones],
+      }));
+      return repair;
+    },
+    updateRepair: async (repairId, data) =>
+      replaceRepair(await updateRepair(token, repairId, data)),
+    transitionRepair: async (repairId, status, note) =>
+      replaceRepair(await transitionRepair(token, repairId, status, note)),
+    chargeRepair: async (repairId, data, idempotencyKey) =>
+      replaceRepair(await chargeRepair(token, repairId, data, idempotencyKey)),
     registerClient: async (data) => {
       const client = await createClient(token, data);
       setReadModel((current) => ({

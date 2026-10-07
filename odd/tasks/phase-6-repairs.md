@@ -6,7 +6,7 @@
 - Route: organic development (ODD), delegated implementation per work unit
 - Repository branch at creation: `feature/phase-5-transfers-counts`
 - Active feature branch: `feature/phase-6-repairs`
-- Next task: `F6-04 — Charge repairs through real sales`
+- Next task: Phase 6 closeout
 - Delivery strategy: `ask-on-risk`
 - Chain strategy: unset
 - Engram mirror: active
@@ -217,11 +217,11 @@ None currently known. If implementation exposes a new edge case, pause and resol
 
 ### F6-05 — Connect repair frontend to API workflows
 
-- [ ] Add repair API adapters and response mappers for create/update/status/payment/delivery.
-- [ ] Replace repair no-op API-mode actions with backend calls and refresh behavior.
-- [ ] Remove repair payment/delivery unknown placeholders once backend exposes authoritative fields.
-- [ ] Preserve existing Spanish UI copy and loading/error states.
-- [ ] Build frontend production bundle.
+- [x] Add repair API adapters and response mappers for create/update/status/payment/delivery.
+- [x] Replace repair no-op API-mode actions with backend calls and refresh behavior.
+- [x] Remove repair payment/delivery unknown placeholders once backend exposes authoritative fields.
+- [x] Preserve existing Spanish UI copy and loading/error states.
+- [x] Build frontend production bundle.
 - Route: delegated writer.
 - Candidate surfaces:
   - `frontend/src/lib/api.js`
@@ -230,7 +230,21 @@ None currently known. If implementation exposes a new edge case, pause and resol
   - `frontend/src/screens/index.jsx`
   - `frontend/README.md` if workflow docs need updating
 - Checks: frontend production build plus focused structural spot-checks.
-- Evidence: pending.
+- Evidence:
+  - Strict TDD was not active because no frontend test runner is configured; ordinary build and structural validation were used as requested.
+  - Added canonical repair adapters for `received` / `in_workshop` / `ready`, `price`, payment totals and balance, delivery/review fields when present, plus create, intake update, transition, and sale-backed charge requests.
+  - Enabled API writes for repairs and replaced API-mode no-ops with state-updating actions in the app shell.
+  - Connected intake with branch context, validated service transitions (including mandatory reopen reason), charge controls backed by an open cash session, partial/full payment indicators, and disabled delivery guidance because no backend delivery endpoint exists.
+  - Create and charge keep the same idempotency key after network/uncertain failures and rotate it after HTTP validation/conflict failures.
+  - `cd frontend && npm run build` passed (22 modules transformed, production bundle emitted); Vite retained the existing non-fatal invalid pure-annotation warning at `src/screens/index.jsx:4478`.
+  - Structural spot-checks found no repair API-mode no-op callbacks or payment/delivery hard-coded false placeholders; `git diff --check` passed.
+  - Review-size concern: the cohesive frontend slice is 465 insertions and 63 deletions before this evidence update, driven mainly by explicit loading/error, cash-session, payment, transition, and disabled-delivery states in the existing `React.createElement` screen style. Suggested review split if required: (1) API mapping/app wiring/docs, then (2) repair screen workflow states.
+  - Backend smoke was not run because the backend contract was unchanged and the frontend production build plus source-level contract inspection were sufficient for this slice.
+  - Independent verification initially failed one workflow issue: the UI allowed partial first charges even though the backend does not yet support a second repair charge. Correction fixed the charge amount to the full current balance, made the field read-only, and rejects mismatched amounts before submission.
+  - Re-verification verdict: PASS. `cd frontend && npm run build` passed with the existing non-fatal invalid pure-annotation warning at `src/screens/index.jsx:4478`; no browser/API runtime smoke test exists.
+  - Native review approved and was acknowledged under lineage `review-94a2ee39fb3c555a` for target `sha256:0d8637170645c843204e277aa94d5226b9384a4e6390ce83f3a5f83f284f4e79`.
+  - Contract limitation: the current `RepairRead` response does not yet emit `delivered_at` or `blocked_for_review`; the mapper consumes them when available, while the UI truthfully keeps delivery unavailable and does not attempt a missing delivery mutation.
+  - Work-unit commit was created as `feat(frontend): connect repair workflows`; final amended identity is reported in session output because a commit cannot contain its own final hash.
 
 ## Verification mode
 

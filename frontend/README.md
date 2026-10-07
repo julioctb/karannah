@@ -22,12 +22,14 @@ npm run preview   # sirve dist/ localmente
 ```
 
 The frontend uses FastAPI for local authentication, catalog, inventory, clients,
-sales, cash management, POS, credits, transfers, and physical counts. Transfer and
-physical-count screens provide persisted API-backed operational workflows, including
-retry-safe idempotency keys for physical-count creation and finalization.
-Promotions, reports, and configuration retain isolated demo data until their
-corresponding slices. Supabase will be introduced in Phase 9 and used only for
-authentication.
+sales, cash management, POS, credits, repairs, transfers, and physical counts.
+Repairs support persisted intake, intake-field updates, validated service-state
+transitions, and charging through a real sale; intake and charge retries preserve
+their idempotency key after uncertain network failures. Delivery remains read-only
+until the backend exposes a delivery endpoint. Transfer and physical-count screens
+also provide persisted API-backed operational workflows. Promotions, reports, and
+configuration retain isolated demo data until their corresponding slices. Supabase
+will be introduced in Phase 9 and used only for authentication.
 
 Si npm falla con `EACCES` en la caché global, usa una caché temporal:
 

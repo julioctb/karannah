@@ -110,12 +110,13 @@ function mapClient(row) {
 
 function mapRepair(row) {
   const statuses = {
-    recibido: "recibida",
-    pendiente_taller: "en_reparacion",
-    en_proceso: "en_reparacion",
-    terminado: "lista",
-    enviado: "en_reparacion",
+    received: "recibida",
+    in_workshop: "en_reparacion",
+    ready: "lista",
   };
+  const paidAmount = Number(row.paid_amount || 0);
+  const balance = Number(row.balance || 0);
+  const deliveryKnown = Object.hasOwn(row, "delivered_at");
   return {
     id: row.id,
     codigo: row.folio,
@@ -125,17 +126,29 @@ function mapRepair(row) {
     servicio: row.service,
     fechaRecepcion: row.received_at,
     fechaEntrega: row.expected_at || "",
-    costo: row.quoted_price === null ? null : Number(row.quoted_price),
-    pagado: false,
+    fechaTerminacion: row.completed_at || null,
+    costo: row.price === null ? null : Number(row.price),
+    montoPagado: paidAmount,
+    saldo: balance,
+    pagado: Boolean(row.paid_enough),
     fechaPago: null,
-    entregado: false,
-    fechaEntregaReal: null,
-    paymentKnown: false,
-    deliveryKnown: false,
+    entregado: Boolean(row.delivered_at),
+    fechaEntregaReal: row.delivered_at || null,
+    paymentKnown: true,
+    deliveryKnown,
+    blockedForReview: Boolean(row.blocked_for_review),
+    saleId: row.sale_id,
     estadoServicio: statuses[row.status] || "recibida",
+    estadoServicioApi: row.status,
     notas: row.notes || "",
   };
 }
+
+const REPAIR_API_STATUSES = {
+  recibida: "received",
+  en_reparacion: "in_workshop",
+  lista: "ready",
+};
 
 function mapSale(row, branchById) {
   const createdAt = new Date(row.created_at);
@@ -466,6 +479,74 @@ export async function getReadModel(token, branches, signal) {
     ventas: saleRows.map((row) => mapSale(row, branchById)),
     reparaciones: repairRows.map(mapRepair),
   };
+}
+
+export async function createRepair(token, data, idempotencyKey) {
+  const row = await request("/repairs", {
+    token,
+    method: "POST",
+    headers: { "Idempotency-Key": idempotencyKey },
+    body: {
+      branch_id: data.branchId,
+      client_id: data.clienteId,
+      product_description: data.pieza,
+      service: data.servicio,
+      price: data.costo === null ? null : String(data.costo),
+      received_at: data.fechaRecepcion,
+      expected_at: data.fechaEntrega || null,
+      notes: data.notas || null,
+    },
+  });
+  return mapRepair(row);
+}
+
+export async function updateRepair(token, repairId, data) {
+  const body = {};
+  if (Object.hasOwn(data, "clienteId")) body.client_id = data.clienteId;
+  if (Object.hasOwn(data, "cliente")) body.client_name = data.cliente;
+  if (Object.hasOwn(data, "confirmarClienteLibre"))
+    body.confirm_free_text_client = data.confirmarClienteLibre;
+  if (Object.hasOwn(data, "pieza")) body.product_description = data.pieza;
+  if (Object.hasOwn(data, "servicio")) body.service = data.servicio;
+  if (Object.hasOwn(data, "costo"))
+    body.price = data.costo === null ? null : String(data.costo);
+  if (Object.hasOwn(data, "fechaRecepcion"))
+    body.received_at = data.fechaRecepcion;
+  if (Object.hasOwn(data, "fechaEntrega"))
+    body.expected_at = data.fechaEntrega || null;
+  if (Object.hasOwn(data, "notas")) body.notes = data.notas || null;
+  const row = await request(`/repairs/${repairId}`, {
+    token,
+    method: "PATCH",
+    body,
+  });
+  return mapRepair(row);
+}
+
+export async function transitionRepair(token, repairId, status, note = null) {
+  const row = await request(`/repairs/${repairId}/transition`, {
+    token,
+    method: "POST",
+    body: { to_status: REPAIR_API_STATUSES[status] || status, note },
+  });
+  return mapRepair(row);
+}
+
+export async function chargeRepair(token, repairId, data, idempotencyKey) {
+  const row = await request(`/repairs/${repairId}/charge`, {
+    token,
+    method: "POST",
+    headers: { "Idempotency-Key": idempotencyKey },
+    body: {
+      cash_session_id: data.cashSessionId,
+      sale_type: data.saleType,
+      payments: data.payments.map((payment) => ({
+        method: payment.method,
+        amount: String(payment.amount),
+      })),
+    },
+  });
+  return mapRepair(row);
 }
 
 export async function createClient(token, data) {
