@@ -2,11 +2,11 @@
 
 ## Status
 
-- State: active
+- State: closed
 - Route: organic development (ODD), delegated implementation per work unit
 - Repository branch at creation: `feature/phase-5-transfers-counts`
 - Active feature branch: `feature/phase-6-repairs`
-- Next task: Phase 6 closeout
+- Next task: none
 - Delivery strategy: `ask-on-risk`
 - Chain strategy: unset
 - Engram mirror: active
@@ -256,8 +256,8 @@ None currently known. If implementation exposes a new edge case, pause and resol
 
 ## Closeout checklist
 
-- [ ] All Phase 6 work units complete.
-- [ ] Backend tests, Ruff, and frontend build recorded.
-- [ ] `docs/PLAN.md` and `docs/CHANGELOG.md` updated.
-- [ ] Native review lifecycle handled when enabled for each candidate.
-- [ ] Work-unit commits recorded as evidence.
+- [x] All Phase 6 work units complete.
+- [x] Backend tests, Ruff, and frontend build recorded.
+- [x] `docs/PLAN.md` and `docs/CHANGELOG.md` updated.
+- [x] Native review lifecycle handled when enabled for each candidate.
+- [x] Work-unit commits recorded as evidence.

@@ -178,11 +178,19 @@ vigente mediante movimientos `conteo`. Las pantallas de traspasos y conteos
 usan la API como única fuente operativa. La verificación integrada aprobó 136
 pruebas de backend, Ruff y el build de producción del frontend.
 
-### Fase 6 — Reparaciones
-- [ ] Unificar estados frontend/backend; alta, costo, precio y fechas.
-- [ ] Historial de estados inmutable; validación de transiciones.
-- [ ] Cobro mediante venta real; sin doble cobro; sin entrega sin pago.
-- [ ] Separar reparación terminada / pagada / entregada.
+### Fase 6 — Reparaciones ✅
+- [x] Unificar estados frontend/backend; alta, precio y fechas.
+- [x] Historial de estados inmutable; validación de transiciones.
+- [x] Cobro mediante venta real; sin doble cobro; entrega pendiente de endpoint backend.
+- [x] Separar reparación terminada / pagada / entregada.
+
+**Fase completada:** reparaciones opera con estados canónicos `received`,
+`in_workshop` y `ready`, historial inmutable, alta/edición desde API, cobro
+mediante ventas reales y líneas de servicio sin movimiento de inventario. La
+pantalla de reparaciones usa la API para alta, edición, transiciones y cobro; la
+entrega queda visible como acción no disponible hasta implementar su endpoint
+operativo. El backend validó 152 pruebas, Ruff y el build de frontend aprobó con
+la advertencia no fatal preexistente sobre `@__PURE__`.
 
 ### Fase 7 — Promociones, reportes y administración
 - [ ] Motor de promociones integrado con cotización/checkout.

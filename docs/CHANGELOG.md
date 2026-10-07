@@ -1,5 +1,38 @@
 # Cambios recientes
 
+## 2026-10-06 — Cierre de Fase 6
+
+### Implementado
+
+- Reparaciones usa estados canónicos backend/frontend: `received`, `in_workshop`
+  y `ready`.
+- Alta, edición de datos de recepción, transiciones de estado y cobro de
+  reparaciones operan mediante API.
+- Cada transición agrega historial inmutable con estado anterior, estado nuevo,
+  actor, timestamp y nota/razón cuando aplica.
+- El cobro de reparaciones crea una venta real con línea de servicio ligada a la
+  reparación, sin movimiento de inventario.
+- El cobro es idempotente y evita doble cobro mediante vínculo único entre
+  reparación, venta y línea de venta.
+- La pantalla de reparaciones consume la API para registrar, editar, cambiar
+  estado y cobrar; la entrega queda deshabilitada hasta que exista endpoint
+  backend.
+
+### Verificación
+
+- Backend: `152 passed` con `cd backend && .venv/bin/pytest -q`.
+- Backend: `cd backend && .venv/bin/ruff check --no-cache app tests alembic`
+  sin errores.
+- Frontend: `cd frontend && npm run build` correcto.
+- El build mantiene una advertencia no fatal preexistente sobre la anotación
+  `@__PURE__` en `src/screens/index.jsx:4478`.
+
+### Pendiente
+
+- Endpoint backend de entrega de reparación y confirmación operacional de entrega
+  con saldo pendiente.
+- Pruebas de migración y concurrencia sobre PostgreSQL real.
+
 ## 2026-09-28 — Cierre de Fase 5
 
 ### Implementado
