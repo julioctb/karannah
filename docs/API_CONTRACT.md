@@ -169,6 +169,19 @@ No existe registro publico.
 - Una nueva deuda mediante checkout solo es válida para clientes `mayoreo` con
   límite de crédito positivo; un cliente `menudeo` no puede generar deuda.
 
+## Configuracion de empresa
+
+- `GET /settings/company` esta disponible para cualquier perfil autenticado y
+  devuelve el perfil global de la unica empresa: `business_name`, `rfc`,
+  `fiscal_address`, `phone` y `email`.
+- Si el singleton aun no existe, la primera lectura lo crea con cadenas vacias.
+  Estos datos son persistentes y no provienen de variables de entorno ni de
+  almacenamiento del navegador.
+- `PATCH /settings/company` acepta actualizaciones parciales y requiere rol
+  `admin`. Recorta texto, normaliza RFC a mayusculas, email a minusculas y
+  telefono mexicano a diez digitos. RFC, fecha incluida en el RFC, email y
+  telefono invalidos responden `422`; campos desconocidos o `null` tambien.
+
 ## Reportes
 
 - `GET /reports/sales-summary` requiere `admin` o `encargado` y devuelve

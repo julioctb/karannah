@@ -109,11 +109,23 @@ Start with the recommended first slice: server-side reports by business date and
 
 ### F7-03 — Persistent configuration foundations
 
-- [ ] Map current localStorage/config sources.
-- [ ] Add backend persistence for selected configuration domain.
-- [ ] Replace frontend local source of truth for that domain.
+- [x] Map current localStorage/config sources.
+- [x] Add backend persistence for selected configuration domain.
+- [x] Replace frontend local source of truth for that domain.
 - Route: delegated writer after reports slice.
-- Evidence: pending.
+- Selected slice: company profile settings first (`name`, `rfc`, fiscal address, phone, email).
+- Product decisions: single-company global settings; only `admin` may modify; missing row is lazily created/read with defaults; RFC/email/phone use strict Mexico-oriented validation where practical.
+- Evidence:
+  - Read-only exploration found `SettingsView` saves generic `joyeria-settings-{section}` localStorage keys but does not read them back; company values are hardcoded defaults.
+  - Backend has no company/settings models/routes yet; environment config is runtime-only and should not be mutable business settings.
+  - Company profile is the smallest safe first slice; branch settings and terminal/printer settings are larger follow-ups.
+  - Strict TDD RED: the focused settings suite failed during collection because `app.models.settings` did not exist.
+  - GREEN: focused tests pass for lazy singleton creation, authenticated reads, admin-only partial updates, persistence, normalization, and invalid-input rejection.
+  - Added `GET/PATCH /settings/company`, migration `0011`, and the API-backed Empresa panel; other settings sections retain explicitly browser-local prototype behavior.
+  - Writer checks: focused settings → 5 passed; settings plus domain API → 46 passed; full backend → 160 passed; Ruff → all checks passed; frontend build → passed with the pre-existing invalid `/* @__PURE__ */` annotation warning at `src/screens/index.jsx:4522`.
+  - Independent verification initially failed because phone/email validation was too permissive. Correction rejects letter-prefixed phone strings and dotted invalid email forms; re-verification passed all focused, regression, full backend, Ruff, and frontend build checks.
+  - Native review approved and was acknowledged under lineage `review-7e9f3730038ffa53` for target `sha256:0a2cdbcf774b36b87296cf62ab75c7a4e55d4bbbdb8d7465db081a40ca6158d3`.
+  - Work-unit commit was created as `feat(settings): persist company profile`; final amended identity is reported in session output because a commit cannot contain its own final hash.
 
 ### F7-04 — Promotion engine slice
 

@@ -44,6 +44,7 @@ from app.models.sales import (
     SaleItem,
     SaleType,
 )
+from app.models.settings import CompanySettings
 
 __all__ = [
     "Branch",
@@ -55,6 +56,7 @@ __all__ = [
     "Client",
     "ClientType",
     "Collection",
+    "CompanySettings",
     "CreditEntry",
     "CreditMovementType",
     "DiscountApproval",

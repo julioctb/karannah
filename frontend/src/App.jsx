@@ -31,6 +31,7 @@ import {
   getCashTerminals,
   getCurrentCashSession,
   getClientCreditLedger,
+  getCompanySettings,
   getCreditRecoveryReport,
   getPhysicalCountDetail,
   getPhysicalCounts,
@@ -48,6 +49,7 @@ import {
   updateClient,
   updateClientCommercialProfile,
   updateCollection,
+  updateCompanySettings,
   updateMaterial,
   updatePhysicalCountLines,
   updateProduct,
@@ -263,6 +265,9 @@ export default function App() {
     },
     getClientCreditLedger: (clientId, options, signal) =>
       getClientCreditLedger(token, clientId, options, signal),
+    getCompanySettings: (signal) => getCompanySettings(token, signal),
+    updateCompanySettings: (company) =>
+      updateCompanySettings(token, company),
     getCreditRecoveryReport: (options, signal) =>
       getCreditRecoveryReport(token, options, signal),
     getSalesSummaryReport: (options, signal) =>

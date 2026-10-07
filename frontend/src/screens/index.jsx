@@ -11148,13 +11148,65 @@ function UsersView() {
       ),
   );
 }
-function SettingsView() {
+function SettingsView({ currentUser, actions = {} }) {
   const [e, t] = useState("empresa"),
     [branches, setBranches] = useState(() =>
       SUCURSALES.map((branch) => ({ ...branch, direccion: "", telefono: "" })),
     ),
     [branchDraft, setBranchDraft] = useState(null),
-    [savedSection, setSavedSection] = useState(null);
+    [savedSection, setSavedSection] = useState(null),
+    [company, setCompany] = useState({
+      businessName: "",
+      rfc: "",
+      fiscalAddress: "",
+      phone: "",
+      email: "",
+    }),
+    [companyLoading, setCompanyLoading] = useState(true),
+    [companySaving, setCompanySaving] = useState(false),
+    [companyError, setCompanyError] = useState("");
+  const canEditCompany = currentUser?.rol === "admin";
+  const announceSaved = (section) => {
+    setSavedSection(section);
+    window.setTimeout(
+      () => setSavedSection((current) => (current === section ? null : current)),
+      2400,
+    );
+  };
+  const loadCompany = async (signal) => {
+    setCompanyLoading(true);
+    setCompanyError("");
+    try {
+      const loaded = await actions.getCompanySettings(signal);
+      setCompany(loaded);
+    } catch (error) {
+      if (error.name !== "AbortError") setCompanyError(error.message);
+    } finally {
+      if (!signal?.aborted) setCompanyLoading(false);
+    }
+  };
+  useEffect(() => {
+    const controller = new AbortController();
+    loadCompany(controller.signal);
+    return () => controller.abort();
+  }, []);
+  const updateCompanyField = (field, value) => {
+    setCompany((current) => ({ ...current, [field]: value }));
+    setCompanyError("");
+  };
+  const saveCompany = async () => {
+    if (!canEditCompany || companySaving) return;
+    setCompanySaving(true);
+    setCompanyError("");
+    try {
+      setCompany(await actions.updateCompanySettings(company));
+      announceSaved("empresa");
+    } catch (error) {
+      setCompanyError(error.message);
+    } finally {
+      setCompanySaving(false);
+    }
+  };
   const saveSettings = (section, event) => {
     const panel = event.currentTarget.closest(".card"),
       controls = Array.from(
@@ -11165,16 +11217,11 @@ function SettingsView() {
         value: control.value,
         checked: control.checked,
       }));
-    (localStorage.setItem(
+    localStorage.setItem(
       `joyeria-settings-${section}`,
       JSON.stringify(values),
-    ),
-      setSavedSection(section),
-      window.setTimeout(
-        () =>
-          setSavedSection((current) => (current === section ? null : current)),
-        2400,
-      ));
+    );
+    announceSaved(section);
   };
   return React.createElement(
     MainLayout,
@@ -11190,7 +11237,9 @@ function SettingsView() {
               "data-od-id": "settings-saved-status",
               className: "pill pill-success",
             },
-            "Cambios guardados",
+            savedSection === "empresa"
+              ? "Cambios guardados"
+              : "Guardado solo en este navegador",
           ),
         React.createElement(BranchModal, {
           branch: branchDraft,
@@ -11263,142 +11312,229 @@ function SettingsView() {
             null,
             React.createElement(
               "h2",
-              { style: { fontSize: 16, fontWeight: 600, marginBottom: 20 } },
+              { style: { fontSize: 16, fontWeight: 600, marginBottom: 8 } },
               "Datos de la Empresa",
             ),
             React.createElement(
-              "div",
+              "p",
               {
                 style: {
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 16,
+                  color: "var(--muted)",
+                  fontSize: 12,
+                  marginBottom: 20,
+                },
+              },
+              "Perfil global respaldado por la API.",
+            ),
+            companyLoading &&
+              React.createElement(
+                "p",
+                { style: { color: "var(--muted)", marginBottom: 16 } },
+                "Cargando datos de la empresa…",
+              ),
+            companyError &&
+              React.createElement(
+                "div",
+                { role: "alert", style: { marginBottom: 16 } },
+                React.createElement(
+                  "p",
+                  { style: { color: "var(--danger)", marginBottom: 8 } },
+                  companyError,
+                ),
+                companyLoading === false &&
+                  React.createElement(
+                    "button",
+                    {
+                      type: "button",
+                      className: "btn-secondary",
+                      onClick: () => loadCompany(),
+                    },
+                    "Reintentar carga",
+                  ),
+              ),
+            !canEditCompany &&
+              React.createElement(
+                "p",
+                {
+                  className: "pill pill-muted",
+                  style: { marginBottom: 16 },
+                },
+                "Solo administración puede modificar estos datos.",
+              ),
+            React.createElement(
+              "form",
+              {
+                onSubmit: (event) => {
+                  event.preventDefault();
+                  saveCompany();
                 },
               },
               React.createElement(
                 "div",
-                null,
-                React.createElement(
-                  "label",
-                  {
-                    style: {
-                      display: "block",
-                      fontSize: 12,
-                      fontWeight: 500,
-                      marginBottom: 6,
-                      color: "var(--muted)",
-                    },
-                  },
-                  "Nombre del Negocio",
-                ),
-                React.createElement("input", {
-                  type: "text",
-                  defaultValue: "Joyería La Perla",
-                  style: { width: "100%" },
-                }),
-              ),
-              React.createElement(
-                "div",
-                null,
-                React.createElement(
-                  "label",
-                  {
-                    style: {
-                      display: "block",
-                      fontSize: 12,
-                      fontWeight: 500,
-                      marginBottom: 6,
-                      color: "var(--muted)",
-                    },
-                  },
-                  "RFC",
-                ),
-                React.createElement("input", {
-                  type: "text",
-                  defaultValue: "JPE850101ABC",
-                  style: { width: "100%" },
-                }),
-              ),
-              React.createElement(
-                "div",
-                { style: { gridColumn: "1 / -1" } },
-                React.createElement(
-                  "label",
-                  {
-                    style: {
-                      display: "block",
-                      fontSize: 12,
-                      fontWeight: 500,
-                      marginBottom: 6,
-                      color: "var(--muted)",
-                    },
-                  },
-                  "Dirección Fiscal",
-                ),
-                React.createElement("input", {
-                  type: "text",
-                  defaultValue: "Av. Juárez 123, Centro, CDMX",
-                  style: { width: "100%" },
-                }),
-              ),
-              React.createElement(
-                "div",
-                null,
-                React.createElement(
-                  "label",
-                  {
-                    style: {
-                      display: "block",
-                      fontSize: 12,
-                      fontWeight: 500,
-                      marginBottom: 6,
-                      color: "var(--muted)",
-                    },
-                  },
-                  "Teléfono Principal",
-                ),
-                React.createElement("input", {
-                  type: "text",
-                  defaultValue: "55 1234 5678",
-                  style: { width: "100%" },
-                }),
-              ),
-              React.createElement(
-                "div",
-                null,
-                React.createElement(
-                  "label",
-                  {
-                    style: {
-                      display: "block",
-                      fontSize: 12,
-                      fontWeight: 500,
-                      marginBottom: 6,
-                      color: "var(--muted)",
-                    },
-                  },
-                  "Email",
-                ),
-                React.createElement("input", {
-                  type: "email",
-                  defaultValue: "contacto@joyeriaperla.mx",
-                  style: { width: "100%" },
-                }),
-              ),
-            ),
-            React.createElement(
-              "div",
-              { style: { marginTop: 24 } },
-              React.createElement(
-                "button",
                 {
-                  "data-od-id": `save-settings-${e}`,
-                  type: "button",
-                  className: "btn-primary",
-                  onClick: (event) => saveSettings(e, event),
+                  style: {
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 16,
+                  },
                 },
-                "Guardar cambios",
+                React.createElement(
+                  "div",
+                  null,
+                  React.createElement(
+                    "label",
+                    {
+                      htmlFor: "company-business-name",
+                      style: {
+                        display: "block",
+                        fontSize: 12,
+                        fontWeight: 500,
+                        marginBottom: 6,
+                        color: "var(--muted)",
+                      },
+                    },
+                    "Nombre del Negocio",
+                  ),
+                  React.createElement("input", {
+                    id: "company-business-name",
+                    type: "text",
+                    required: true,
+                    maxLength: 160,
+                    value: company.businessName,
+                    onChange: (event) =>
+                      updateCompanyField("businessName", event.target.value),
+                    disabled: companyLoading || companySaving || !canEditCompany,
+                    style: { width: "100%" },
+                  }),
+                ),
+                React.createElement(
+                  "div",
+                  null,
+                  React.createElement(
+                    "label",
+                    {
+                      htmlFor: "company-rfc",
+                      style: {
+                        display: "block",
+                        fontSize: 12,
+                        fontWeight: 500,
+                        marginBottom: 6,
+                        color: "var(--muted)",
+                      },
+                    },
+                    "RFC",
+                  ),
+                  React.createElement("input", {
+                    id: "company-rfc",
+                    type: "text",
+                    maxLength: 13,
+                    value: company.rfc,
+                    onChange: (event) =>
+                      updateCompanyField("rfc", event.target.value),
+                    disabled: companyLoading || companySaving || !canEditCompany,
+                    style: { width: "100%", textTransform: "uppercase" },
+                  }),
+                ),
+                React.createElement(
+                  "div",
+                  { style: { gridColumn: "1 / -1" } },
+                  React.createElement(
+                    "label",
+                    {
+                      htmlFor: "company-fiscal-address",
+                      style: {
+                        display: "block",
+                        fontSize: 12,
+                        fontWeight: 500,
+                        marginBottom: 6,
+                        color: "var(--muted)",
+                      },
+                    },
+                    "Dirección Fiscal",
+                  ),
+                  React.createElement("input", {
+                    id: "company-fiscal-address",
+                    type: "text",
+                    maxLength: 500,
+                    value: company.fiscalAddress,
+                    onChange: (event) =>
+                      updateCompanyField("fiscalAddress", event.target.value),
+                    disabled: companyLoading || companySaving || !canEditCompany,
+                    style: { width: "100%" },
+                  }),
+                ),
+                React.createElement(
+                  "div",
+                  null,
+                  React.createElement(
+                    "label",
+                    {
+                      htmlFor: "company-phone",
+                      style: {
+                        display: "block",
+                        fontSize: 12,
+                        fontWeight: 500,
+                        marginBottom: 6,
+                        color: "var(--muted)",
+                      },
+                    },
+                    "Teléfono Principal",
+                  ),
+                  React.createElement("input", {
+                    id: "company-phone",
+                    type: "tel",
+                    maxLength: 30,
+                    value: company.phone,
+                    onChange: (event) =>
+                      updateCompanyField("phone", event.target.value),
+                    disabled: companyLoading || companySaving || !canEditCompany,
+                    style: { width: "100%" },
+                  }),
+                ),
+                React.createElement(
+                  "div",
+                  null,
+                  React.createElement(
+                    "label",
+                    {
+                      htmlFor: "company-email",
+                      style: {
+                        display: "block",
+                        fontSize: 12,
+                        fontWeight: 500,
+                        marginBottom: 6,
+                        color: "var(--muted)",
+                      },
+                    },
+                    "Email",
+                  ),
+                  React.createElement("input", {
+                    id: "company-email",
+                    type: "email",
+                    maxLength: 255,
+                    value: company.email,
+                    onChange: (event) =>
+                      updateCompanyField("email", event.target.value),
+                    disabled: companyLoading || companySaving || !canEditCompany,
+                    style: { width: "100%" },
+                  }),
+                ),
               ),
+              canEditCompany &&
+                React.createElement(
+                  "div",
+                  { style: { marginTop: 24 } },
+                  React.createElement(
+                    "button",
+                    {
+                      "data-od-id": "save-settings-empresa",
+                      type: "submit",
+                      className: "btn-primary",
+                      disabled: companyLoading || companySaving,
+                    },
+                    companySaving ? "Guardando…" : "Guardar cambios",
+                  ),
+                ),
             ),
           ),
         "sucursales" === e &&

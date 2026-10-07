@@ -210,6 +210,16 @@ function mapSaleDetail(row, branchById) {
   };
 }
 
+function mapCompanySettings(row) {
+  return {
+    businessName: row.business_name,
+    rfc: row.rfc,
+    fiscalAddress: row.fiscal_address,
+    phone: row.phone,
+    email: row.email,
+  };
+}
+
 function mapSalesSummaryReport(row) {
   return {
     branchId: row.branch_id,
@@ -791,6 +801,26 @@ export function getClientCreditLedger(token, clientId, { limit = 100, offset = 0
     `/clients/${clientId}/credit-ledger?limit=${limit}&offset=${offset}`,
     { token, signal },
   );
+}
+
+export function getCompanySettings(token, signal) {
+  return request("/settings/company", { token, signal }).then(
+    mapCompanySettings,
+  );
+}
+
+export function updateCompanySettings(token, company) {
+  return request("/settings/company", {
+    token,
+    method: "PATCH",
+    body: {
+      business_name: company.businessName,
+      rfc: company.rfc,
+      fiscal_address: company.fiscalAddress,
+      phone: company.phone,
+      email: company.email,
+    },
+  }).then(mapCompanySettings);
 }
 
 export function getSalesSummaryReport(token, options = {}, signal) {
