@@ -8,6 +8,8 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.repairs import RepairStatus
+from app.models.sales import SaleType
+from app.schemas.sales import CheckoutPaymentCreate
 
 
 class RepairIntakeFields(BaseModel):
@@ -62,6 +64,14 @@ class RepairUpdate(BaseModel):
         return value.strip() if isinstance(value, str) else value
 
 
+class RepairCharge(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    cash_session_id: uuid.UUID
+    sale_type: SaleType = SaleType.MENUDEO
+    payments: list[CheckoutPaymentCreate] = Field(min_length=1, max_length=10)
+
+
 class RepairTransition(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -91,3 +101,7 @@ class RepairRead(BaseModel):
     expected_at: date | None = None
     completed_at: date | None = None
     notes: str | None = None
+    sale_id: int | None = None
+    paid_amount: Decimal = Decimal(0)
+    balance: Decimal = Decimal(0)
+    paid_enough: bool = False

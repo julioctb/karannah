@@ -91,7 +91,7 @@ class PaymentRead(BaseModel):
 
 class SaleItemRead(BaseModel):
     id: int
-    variant_id: int
+    variant_id: int | None
     sku: str
     product_name: str
     variant_value: str | None

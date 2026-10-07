@@ -171,23 +171,49 @@ None currently known. If implementation exposes a new edge case, pause and resol
 
 ### F6-04 — Charge repairs through real sales
 
-- [ ] Add the chosen sale/repair linkage so a repair can be charged exactly once.
-- [ ] Make repair payment idempotent and prevent double charge.
-- [ ] Reflect paid state from the authoritative sale/payment result.
-- [ ] Preserve existing POS/sales invariants and money handling.
-- [ ] Add payment, double-charge, and unpaid-delivery tests.
-- [ ] Update API contract.
+- [x] Add the chosen sale/repair linkage so a repair can be charged exactly once.
+- [x] Make repair payment idempotent and prevent double charge.
+- [x] Reflect paid state from the authoritative sale/payment result.
+- [x] Preserve existing POS/sales invariants and money handling.
+- [x] Add payment, double-charge, partial-payment, credit, and no-stock tests.
+- [x] Update API contract.
 - Route: delegated writer.
 - Candidate surfaces:
   - `backend/app/models/repairs.py`
-  - `backend/app/models/sales.py` if needed
+  - `backend/app/models/sales.py`
+  - `backend/alembic/versions/0010_phase6_repair_sales.py`
   - `backend/app/services/pos.py`
   - `backend/app/api/v1/repairs.py`
   - `backend/app/schemas/repairs.py`
-  - `backend/tests/test_*repair*.py` and/or sales/POS tests
+  - `backend/app/schemas/sales.py`
+  - `backend/app/services/repairs.py`
+  - `backend/tests/test_repairs_phase6.py`
   - `docs/API_CONTRACT.md`
 - Checks: focused backend repair/POS tests, full backend tests, Ruff.
-- Evidence: pending.
+- Evidence:
+  - Strict TDD RED: `cd backend && .venv/bin/pytest -q tests/test_repairs_phase6.py`
+    failed `5 failed, 11 passed` for the missing service-line model/migration and
+    missing charge endpoint.
+  - Added nullable inventory variant plus unique `repair_id` sale-item source,
+    protected by an exclusive-source check constraint and migration
+    `0010_phase6_repair_sales.py`.
+  - Added idempotent `POST /repairs/{repair_id}/charge`: it locks the repair,
+    requires an open branch cash session, creates one real `VTA-*` sale/service
+    item, rejects overpayment and double charge, and emits no stock movement.
+  - Partial payments remain visible as `paid_amount` and `balance`; approved
+    mayoreo credit uses the existing credit-limit/ledger rules and counts toward
+    `paid_enough`. Repair reads derive these fields from the linked sale/payments.
+  - Linked repair-sale cancellation skips inventory reversal, blocks the repair
+    for review, and is rejected after delivery.
+  - GREEN focused repair tests: 16 passed in 0.78s. Regression selection: 59
+    passed in 2.71s. Full backend: 152 passed in 4.77s. Ruff: all checks passed.
+  - Review-size note: the cohesive backend slice is 556 added/changed diff lines
+    before this evidence update, including 193 focused test lines and migration/
+    contract documentation; no frontend or delivery workflow was included.
+  - Independent verification initially failed one schema contract issue: repair service lines returned `variant_id: null` while `SaleItemRead.variant_id` was typed as non-null. Correction changed it to `int | None` and added a regression assertion using `SaleItemRead.model_validate(...)`.
+  - Re-verification verdict: PASS, no blocking findings. Focused repair tests 16 passed; repair/domain/seed selection 59 passed; full backend 152 passed; Ruff all checks passed. Residual risk: migration behavior was unit/source-validated, not applied to live PostgreSQL.
+  - Native review approved and was acknowledged under lineage `review-cda3881fe48ccbf0` for target `sha256:6c4907602cb600b3bb07c8a906712e7cdb5ec5ad7149e2817ebb4cb39ea007e9`; advisory `R3-001` on `backend/alembic/versions/0010_phase6_repair_sales.py:49` was informational/non-blocking.
+  - Work-unit commit was created as `feat(repairs): charge through sales`; final amended identity is reported in session output because a commit cannot contain its own final hash.
 
 ### F6-05 — Connect repair frontend to API workflows
 

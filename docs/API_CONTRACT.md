@@ -221,9 +221,11 @@ No existe registro publico.
 - `client_id` es nullable para permitir la excepcion de cliente libre;
   `client_name` siempre conserva el nombre mostrado al cliente. Solo se almacena
   el importe `price` de cara al cliente.
-- `sale_id` enlaza como maximo una venta real por reparacion. `paid_amount` y
-  `balance` se derivan del precio y de los pagos/credito de esa venta; no existe
-  un ledger de pago paralelo en reparaciones.
+- `sale_id` enlaza como maximo una venta real por reparacion. `paid_amount`,
+  `balance` y `paid_enough` se derivan de la venta confirmada y de la suma de sus
+  pagos; no existe un ledger de pago paralelo en reparaciones. El credito
+  aprobado cuenta como pagado para este resultado aunque permanezca como deuda
+  en cuentas por cobrar.
 - `delivered_at` registra la entrega por separado del estado de servicio.
   `blocked_for_review` marca una reparacion cuya venta fue cancelada antes de la
   entrega y que requiere revision antes de reactivarse o cobrarse otra vez.
@@ -255,8 +257,26 @@ No existe registro publico.
   una fila inmutable con `from_status`, `to_status`, `actor_id` y `note`. La
   primera llegada a `ready` establece `completed_at`; las reaperturas conservan
   esa fecha. Cambiar el servicio a `ready` no cobra, no marca pago y no entrega.
-- Estas rutas no implementan cobro, entrega, cancelacion de venta ni reactivacion
-  de reparaciones bloqueadas; esos contratos corresponden a unidades posteriores.
+- `POST /repairs/{repair_id}/charge` requiere `Idempotency-Key`, una sesion de
+  caja abierta de la sucursal operativa, `sale_type` y entre uno y diez pagos.
+  Crea una venta `VTA-SUC-AÑO-NÚMERO` y una partida ligada de forma unica a la
+  reparacion. Los reintentos con la misma llave y cuerpo devuelven el mismo
+  resultado; cambiar el cuerpo responde `409`, igual que intentar un segundo
+  cobro con otra llave.
+- Las reparaciones usan partidas de servicio con `repair_id` y `variant_id=null`;
+  no generan movimientos de inventario ni decrementan existencias. El precio de
+  la reparacion es el total de la venta y queda congelado al cobrar. Sus importes
+  se redondean a centavos y conservan el desglose fiscal del POS.
+- Se permiten pagos parciales sin exceder el total. Efectivo genera movimiento de
+  caja; credito exige un cliente mayoreo activo con limite disponible y genera
+  la entrada correspondiente en cuentas por cobrar. El credito aprobado cuenta como pagado
+  para entrega. La suma persistida de pagos coincide exactamente con
+  la suma enviada; `balance` expone cualquier resto no cubierto.
+- La cancelacion de una venta ligada no repone inventario para la partida de
+  servicio y bloquea la reparacion para revision. Una venta ligada a una
+  reparacion ya entregada no se puede cancelar.
+- Estas rutas todavia no implementan entrega ni reactivacion de reparaciones
+  bloqueadas; esos contratos corresponden a unidades posteriores.
 
 ## Errores
 

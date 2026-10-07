@@ -110,11 +110,22 @@ class SaleItem(Base):
     __table_args__ = (
         CheckConstraint("quantity > 0", name="ck_sale_items_quantity_positive"),
         CheckConstraint("unit_price >= 0", name="ck_sale_items_unit_price_nonnegative"),
+        CheckConstraint(
+            "(variant_id IS NOT NULL AND repair_id IS NULL) OR "
+            "(variant_id IS NULL AND repair_id IS NOT NULL)",
+            name="ck_sale_items_single_line_source",
+        ),
+        UniqueConstraint("repair_id", name="uq_sale_items_repair_id"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     sale_id: Mapped[int] = mapped_column(ForeignKey("sales.id", ondelete="CASCADE"), index=True)
-    variant_id: Mapped[int] = mapped_column(ForeignKey("product_variants.id"), index=True)
+    variant_id: Mapped[int | None] = mapped_column(
+        ForeignKey("product_variants.id"), nullable=True, index=True
+    )
+    repair_id: Mapped[int | None] = mapped_column(
+        ForeignKey("repairs.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
     sku: Mapped[str] = mapped_column(String(32), default="", server_default="")
     product_name: Mapped[str] = mapped_column(String(255), default="", server_default="")
     variant_value: Mapped[str | None] = mapped_column(String(80), nullable=True)

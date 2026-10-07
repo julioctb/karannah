@@ -19,11 +19,14 @@ from app.core.db import Base, get_db
 from app.core.security import TokenClaims
 from app.main import app
 from app.schemas.repairs import RepairRead
+from app.schemas.sales import SaleItemRead
 
 ADMIN_ID = uuid.uuid4()
 SELLER_ID = uuid.uuid4()
 BRANCH_T01 = uuid.uuid4()
 BRANCH_T02 = uuid.uuid4()
+TERMINAL_ID = uuid.uuid4()
+CASH_SESSION_ID = uuid.uuid4()
 
 
 @pytest_asyncio.fixture()
@@ -62,11 +65,35 @@ async def repair_session_factory():
                     type=models.ClientType.MENUDEO,
                     active=False,
                 ),
+                models.Client(
+                    id=103,
+                    name="Cliente Mayoreo",
+                    type=models.ClientType.MAYOREO,
+                    credit_limit=1000,
+                    active=True,
+                ),
+                models.Terminal(
+                    id=TERMINAL_ID,
+                    branch_id=BRANCH_T01,
+                    code="POS-01",
+                    name="Caja Centro",
+                ),
             ]
         )
         await session.flush()
-        session.add(
-            models.UserBranchAssignment(user_id=SELLER_ID, branch_id=BRANCH_T01)
+        session.add_all(
+            [
+                models.UserBranchAssignment(user_id=SELLER_ID, branch_id=BRANCH_T01),
+                models.CashSession(
+                    id=CASH_SESSION_ID,
+                    terminal_id=TERMINAL_ID,
+                    branch_id=BRANCH_T01,
+                    opening_amount=100,
+                    opened_by=SELLER_ID,
+                    status=models.CashSessionStatus.ABIERTA,
+                    business_date=date(2026, 3, 1),
+                ),
+            ]
         )
         await session.commit()
 
@@ -167,6 +194,19 @@ def test_repair_model_uses_phase6_service_vocabulary_and_operational_foundations
         if isinstance(constraint, UniqueConstraint)
     }
     assert uniques["uq_repairs_sale_id"] == ("sale_id",)
+
+    sale_items = models.SaleItem.__table__
+    assert sale_items.c.variant_id.nullable is True
+    assert sale_items.c.repair_id.nullable is True
+    assert next(iter(sale_items.c.repair_id.foreign_keys)).target_fullname == "repairs.id"
+    sale_item_checks = {constraint.name for constraint in sale_items.constraints}
+    assert "ck_sale_items_single_line_source" in sale_item_checks
+    sale_item_uniques = {
+        constraint.name: tuple(constraint.columns.keys())
+        for constraint in sale_items.constraints
+        if isinstance(constraint, UniqueConstraint)
+    }
+    assert sale_item_uniques["uq_sale_items_repair_id"] == ("repair_id",)
 
 
 def test_repair_status_history_shape_and_relationships_are_append_only():
@@ -323,6 +363,21 @@ def test_phase6_migration_downgrade_clears_default_and_removes_append_only_objec
     )
 
 
+def test_phase6_repair_sales_migration_adds_service_line_constraints():
+    migration_path = (
+        Path(__file__).resolve().parents[1]
+        / "alembic"
+        / "versions"
+        / "0010_phase6_repair_sales.py"
+    )
+    source = migration_path.read_text()
+    assert 'down_revision: str | None = "0009_phase6_repairs"' in source
+    assert 'op.alter_column("sale_items", "variant_id", nullable=True)' in source
+    assert 'op.add_column("sale_items", sa.Column("repair_id"' in source
+    assert "ck_sale_items_single_line_source" in source
+    assert "uq_sale_items_repair_id" in source
+
+
 def test_api_contract_documents_repair_foundations_and_transitions():
     contract = Path(__file__).resolve().parents[2].joinpath("docs", "API_CONTRACT.md").read_text()
 
@@ -351,6 +406,12 @@ def test_api_contract_documents_repair_foundations_and_transitions():
     assert "no cobra, no marca pago y no entrega" in repair_section
     assert "enviado" not in repair_section
     assert "cost" not in repair_section
+    assert "POST /repairs/{repair_id}/charge" in repair_section
+    assert "Idempotency-Key" in repair_section
+    assert "partidas de servicio" in repair_section
+    assert "no generan movimientos de inventario" in repair_section
+    assert "pagos parciales" in repair_section
+    assert "credito aprobado cuenta como pagado" in repair_section
 
 
 @pytest.mark.asyncio
@@ -376,6 +437,10 @@ async def test_create_repair_is_atomic_canonical_and_idempotent(
         "expected_at": "2026-03-08",
         "completed_at": None,
         "notes": "Conservar grabado",
+        "sale_id": None,
+        "paid_amount": "0.00",
+        "balance": "450.00",
+        "paid_enough": False,
     }
 
     repeated = await repair_client.post(
@@ -755,3 +820,129 @@ async def test_repair_status_transition_rejects_hidden_delivered_and_blocked_rep
     async with repair_session_factory() as session:
         history = list((await session.scalars(select(models.RepairStatusHistory))).all())
         assert history == []
+
+
+@pytest.mark.asyncio
+async def test_charge_repair_creates_real_partial_sale_idempotently_without_stock(
+    repair_client, repair_session_factory
+):
+    created = await repair_client.post(
+        "/api/v1/repairs",
+        json=_intake_payload(),
+        headers={"Idempotency-Key": "repair-for-charge"},
+    )
+    repair_id = created.json()["id"]
+    payload = {
+        "cash_session_id": str(CASH_SESSION_ID),
+        "sale_type": "menudeo",
+        "payments": [{"method": "efectivo", "amount": "200.00"}],
+    }
+    headers = {"Idempotency-Key": "repair-charge-1"}
+
+    first = await repair_client.post(
+        f"/api/v1/repairs/{repair_id}/charge", json=payload, headers=headers
+    )
+    assert first.status_code == 201, first.text
+    charged = first.json()
+    assert charged["sale_id"] is not None
+    assert charged["paid_amount"] == "200.00"
+    assert charged["balance"] == "250.00"
+    assert charged["paid_enough"] is False
+    sale_detail = await repair_client.get(f"/api/v1/sales/{charged['sale_id']}")
+    assert sale_detail.status_code == 200, sale_detail.text
+    assert sale_detail.json()["items"][0]["variant_id"] is None
+    assert SaleItemRead.model_validate(sale_detail.json()["items"][0]).variant_id is None
+
+    replay = await repair_client.post(
+        f"/api/v1/repairs/{repair_id}/charge", json=payload, headers=headers
+    )
+    assert replay.status_code == 201
+    assert replay.json() == charged
+    changed = await repair_client.post(
+        f"/api/v1/repairs/{repair_id}/charge",
+        json={**payload, "payments": [{"method": "efectivo", "amount": "201.00"}]},
+        headers=headers,
+    )
+    assert changed.status_code == 409
+    duplicate = await repair_client.post(
+        f"/api/v1/repairs/{repair_id}/charge",
+        json=payload,
+        headers={"Idempotency-Key": "repair-charge-2"},
+    )
+    assert duplicate.status_code == 409
+
+    async with repair_session_factory() as session:
+        repair = await session.get(models.Repair, repair_id)
+        assert repair is not None
+        sale = await session.get(models.Sale, repair.sale_id)
+        items = list(
+            (await session.scalars(select(models.SaleItem).where(models.SaleItem.sale_id == sale.id))).all()
+        )
+        assert sale is not None
+        assert sale.total == 450
+        assert sale.folio.startswith("VTA-T01-")
+        assert len(items) == 1
+        assert items[0].variant_id is None
+        assert items[0].repair_id == repair_id
+        assert items[0].product_name == "Reparación RP-T01-2026-000001"
+        assert list((await session.scalars(select(models.StockEntry))).all()) == []
+        assert len(list((await session.scalars(select(models.CashMovement))).all())) == 1
+
+
+@pytest.mark.asyncio
+async def test_charge_repair_credit_obeys_mayoreo_rules_and_counts_as_paid(
+    repair_client, repair_session_factory
+):
+    created = await repair_client.post(
+        "/api/v1/repairs",
+        json=_intake_payload(client_id=103),
+        headers={"Idempotency-Key": "repair-credit-intake"},
+    )
+    repair_id = created.json()["id"]
+    response = await repair_client.post(
+        f"/api/v1/repairs/{repair_id}/charge",
+        json={
+            "cash_session_id": str(CASH_SESSION_ID),
+            "sale_type": "mayoreo",
+            "payments": [{"method": "credito", "amount": "450.00"}],
+        },
+        headers={"Idempotency-Key": "repair-credit-charge"},
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["paid_amount"] == "450.00"
+    assert response.json()["balance"] == "0.00"
+    assert response.json()["paid_enough"] is True
+
+    async with repair_session_factory() as session:
+        repair = await session.get(models.Repair, repair_id)
+        sale = await session.get(models.Sale, repair.sale_id)
+        assert sale.condition == models.SaleCondition.CREDITO
+        entries = list((await session.scalars(select(models.CreditEntry))).all())
+        assert len(entries) == 1
+        assert entries[0].quantity == 450
+
+
+@pytest.mark.asyncio
+async def test_charge_repair_rejects_invalid_payment_and_retail_credit(repair_client):
+    created = await repair_client.post(
+        "/api/v1/repairs",
+        json=_intake_payload(),
+        headers={"Idempotency-Key": "repair-invalid-charge-intake"},
+    )
+    repair_id = created.json()["id"]
+    cases = [
+        ({"payments": [{"method": "efectivo", "amount": "451.00"}]}, 422),
+        ({"payments": [{"method": "credito", "amount": "450.00"}]}, 422),
+    ]
+    for index, (changes, expected) in enumerate(cases):
+        payload = {
+            "cash_session_id": str(CASH_SESSION_ID),
+            "sale_type": "menudeo",
+            **changes,
+        }
+        response = await repair_client.post(
+            f"/api/v1/repairs/{repair_id}/charge",
+            json=payload,
+            headers={"Idempotency-Key": f"repair-invalid-charge-{index}"},
+        )
+        assert response.status_code == expected, response.text

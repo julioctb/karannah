@@ -15,8 +15,16 @@ from app.api.pagination import PaginationParams
 from app.core.db import get_db
 from app.models.identity import UserProfile
 from app.models.repairs import Repair, RepairStatus
-from app.schemas.repairs import RepairCreate, RepairRead, RepairTransition, RepairUpdate
+from app.schemas.repairs import (
+    RepairCharge,
+    RepairCreate,
+    RepairRead,
+    RepairTransition,
+    RepairUpdate,
+)
+from app.services.repairs import charge_repair as charge_repair_service
 from app.services.repairs import create_repair as create_repair_service
+from app.services.repairs import repair_reads
 from app.services.repairs import transition_repair as transition_repair_service
 from app.services.repairs import update_repair as update_repair_service
 
@@ -39,7 +47,7 @@ async def list_repairs(
     if status is not None:
         stmt = stmt.where(Repair.status == status)
     result = await db.execute(stmt.limit(limit).offset(offset))
-    return list(result.scalars().all())
+    return await repair_reads(db, list(result.scalars().all()))
 
 
 @router.post("", response_model=RepairRead, status_code=status.HTTP_201_CREATED)
@@ -69,6 +77,31 @@ async def update_repair(
 ) -> RepairRead:
     branch_ids = await visible_branch_ids(db, profile)
     result = await update_repair_service(db, repair_id, payload, branch_ids)
+    await db.commit()
+    return result
+
+
+@router.post(
+    "/{repair_id}/charge",
+    response_model=RepairRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def charge_repair(
+    repair_id: int,
+    payload: RepairCharge,
+    db: Db,
+    profile: Profile,
+    idempotency_key: Annotated[
+        str, Header(alias="Idempotency-Key", min_length=1, max_length=120)
+    ],
+) -> RepairRead:
+    key = idempotency_key.strip()
+    if not key:
+        raise HTTPException(status_code=422, detail="Idempotency-Key no puede estar vacio")
+    branch_ids = await visible_branch_ids(db, profile)
+    result = await charge_repair_service(
+        db, repair_id, payload, profile, branch_ids, key
+    )
     await db.commit()
     return result
 

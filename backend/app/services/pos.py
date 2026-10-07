@@ -15,6 +15,7 @@ from app.models.catalog import Product, ProductVariant
 from app.models.clients import Client, ClientType, CreditEntry, CreditMovementType
 from app.models.identity import Branch, Role, UserProfile
 from app.models.inventory import StockBalance, StockEntry, StockMovementType
+from app.models.repairs import Repair
 from app.models.sales import (
     DiscountApproval,
     Payment,
@@ -24,6 +25,7 @@ from app.models.sales import (
     SaleItem,
     SaleStatus,
 )
+from app.schemas.repairs import RepairCharge
 from app.schemas.sales import (
     CancelSaleCreate,
     CheckoutCreate,
@@ -396,6 +398,153 @@ async def checkout(
     return result
 
 
+async def create_repair_sale(
+    db: AsyncSession,
+    repair: Repair,
+    payload: RepairCharge,
+    profile: UserProfile,
+    branch: Branch,
+) -> Sale:
+    """Persist a repair charge as a sale without touching inventory."""
+    if repair.price is None:
+        raise HTTPException(status_code=422, detail="La reparacion no tiene precio")
+
+    cash_session = await lock_open_cash_session(
+        db, payload.cash_session_id, branch.id
+    )
+    total = money(repair.price)
+    payment_total = money(
+        sum((payment.amount for payment in payload.payments), Decimal(0))
+    )
+    if payment_total > total:
+        raise HTTPException(
+            status_code=422, detail="Los pagos no pueden exceder el total"
+        )
+
+    credit_amount = money(
+        sum(
+            (
+                payment.amount
+                for payment in payload.payments
+                if payment.method is PaymentMethod.CREDITO
+            ),
+            Decimal(0),
+        )
+    )
+    client: Client | None = None
+    if repair.client_id is not None:
+        client = await db.scalar(
+            select(Client).where(Client.id == repair.client_id).with_for_update()
+        )
+        if client is None or not client.active:
+            raise HTTPException(status_code=404, detail="Cliente activo no encontrado")
+    if credit_amount:
+        if (
+            client is None
+            or client.type is not ClientType.MAYOREO
+            or client.credit_limit is None
+        ):
+            raise HTTPException(
+                status_code=422,
+                detail="El credito requiere un cliente mayoreo con limite disponible",
+            )
+        credit_balance = Decimal(
+            await db.scalar(
+                select(func.coalesce(func.sum(CreditEntry.quantity), 0)).where(
+                    CreditEntry.client_id == client.id
+                )
+            )
+            or 0
+        )
+        if money(credit_balance + credit_amount) > client.credit_limit:
+            raise HTTPException(
+                status_code=409, detail="El credito excede el limite del cliente"
+            )
+
+    tax = money(total * IVA_RATE / (Decimal(1) + IVA_RATE))
+    subtotal = money(total - tax)
+    folio = await _next_folio(db, branch)
+    methods = {payment.method for payment in payload.payments}
+    payment_method = (
+        next(iter(methods)) if len(methods) == 1 else PaymentMethod.MIXTO
+    )
+    sale = Sale(
+        folio=folio,
+        branch_id=branch.id,
+        user_id=profile.id,
+        client_id=client.id if client else None,
+        cash_session_id=cash_session.id,
+        sale_type=payload.sale_type,
+        condition=(
+            SaleCondition.CREDITO if credit_amount else SaleCondition.CONTADO
+        ),
+        payment_method=payment_method,
+        subtotal=subtotal,
+        discount=Decimal(0),
+        discount_percent=Decimal(0),
+        tax=tax,
+        total=total,
+    )
+    db.add(sale)
+    await db.flush()
+    db.add(
+        SaleItem(
+            sale_id=sale.id,
+            variant_id=None,
+            repair_id=repair.id,
+            sku=f"REPAIR-{repair.id}",
+            product_name=f"Reparación {repair.folio}",
+            variant_value=repair.service,
+            quantity=1,
+            unit_price=total,
+            base=total,
+            discount=Decimal(0),
+            subtotal=subtotal,
+            tax=tax,
+            total=total,
+        )
+    )
+    for submitted in payload.payments:
+        amount = money(submitted.amount)
+        db.add(
+            Payment(
+                sale_id=sale.id,
+                method=submitted.method,
+                amount=amount,
+                cash_session_id=(
+                    cash_session.id
+                    if submitted.method is PaymentMethod.EFECTIVO
+                    else None
+                ),
+            )
+        )
+        if submitted.method is PaymentMethod.EFECTIVO:
+            db.add(
+                CashMovement(
+                    cash_session_id=cash_session.id,
+                    movement_type=CashMovementType.VENTA,
+                    amount=amount,
+                    reference=folio,
+                    created_by=profile.id,
+                )
+            )
+    if credit_amount and client is not None:
+        db.add(
+            CreditEntry(
+                client_id=client.id,
+                branch_id=branch.id,
+                quantity=credit_amount,
+                movement_type=CreditMovementType.VENTA_CREDITO,
+                reference=folio,
+                sale_id=sale.id,
+                payment_method=PaymentMethod.CREDITO.value,
+                created_by=profile.id,
+            )
+        )
+    await db.flush()
+    return sale
+
+
 async def cancel_sale(
     db: AsyncSession,
     sale_id: int,
@@ -418,6 +567,14 @@ async def cancel_sale(
         raise HTTPException(status_code=404, detail="Venta no encontrada")
     if sale.status is SaleStatus.CANCELADA:
         raise HTTPException(status_code=409, detail="La venta ya esta cancelada")
+    linked_repair = await db.scalar(
+        select(Repair).where(Repair.sale_id == sale.id).with_for_update()
+    )
+    if linked_repair is not None and linked_repair.delivered_at is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="La venta de una reparacion entregada no puede cancelarse",
+        )
 
     payments = list(
         await db.scalars(select(Payment).where(Payment.sale_id == sale.id).order_by(Payment.id))
@@ -440,6 +597,8 @@ async def cancel_sale(
         await db.scalars(select(SaleItem).where(SaleItem.sale_id == sale.id).order_by(SaleItem.id))
     )
     for item in items:
+        if item.repair_id is not None:
+            continue
         balance = await db.scalar(
             select(StockBalance)
             .where(
@@ -524,6 +683,8 @@ async def cancel_sale(
                 )
             )
 
+    if linked_repair is not None:
+        linked_repair.blocked_for_review = True
     sale.status = SaleStatus.CANCELADA
     sale.cancelled_at = datetime.now(UTC)
     sale.cancelled_by = profile.id
@@ -584,7 +745,27 @@ async def sale_detail(db: AsyncSession, sale_id: int) -> SaleDetailRead:
     )
     return SaleDetailRead(
         **dict(row),
-        items=[SaleItemRead.model_validate(item, from_attributes=True) for item in items],
+        items=[
+            (
+                SaleItemRead.model_validate(item, from_attributes=True)
+                if item.variant_id is not None
+                else SaleItemRead.model_construct(
+                    id=item.id,
+                    variant_id=None,
+                    sku=item.sku,
+                    product_name=item.product_name,
+                    variant_value=item.variant_value,
+                    quantity=item.quantity,
+                    unit_price=item.unit_price,
+                    base=item.base,
+                    discount=item.discount,
+                    subtotal=item.subtotal,
+                    tax=item.tax,
+                    total=item.total,
+                )
+            )
+            for item in items
+        ],
         payments=[
             PaymentRead.model_validate(payment, from_attributes=True) for payment in payments
         ],
