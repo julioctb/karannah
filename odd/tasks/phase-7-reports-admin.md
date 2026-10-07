@@ -129,11 +129,23 @@ Start with the recommended first slice: server-side reports by business date and
 
 ### F7-04 — Promotion engine slice
 
-- [ ] Design promotion rule scope integrated with quote/checkout.
-- [ ] Implement one reviewable backend promotion slice with tests.
+- [x] Design promotion rule scope integrated with quote/checkout.
+- [x] Implement one reviewable backend promotion slice with tests.
 - [ ] Connect frontend visibility if needed.
 - Route: delegated writer after reports/config foundations.
-- Evidence: pending.
+- Selected backend slice: explicit, global, non-stackable cart-wide percentage promotions for menudeo sales.
+- Product decisions: POS user explicitly selects a promotion; first rule type applies a percentage to the whole cart; promotions are global rather than branch-scoped; promotions cannot stack with manual discounts; only admin creates/edits promotions; all operational roles may list/apply active promotions in POS; promotions apply only to menudeo; date range uses inclusive commercial-day `starts_on`/`ends_on` semantics.
+- Evidence:
+  - Read-only exploration mapped existing manual discount/approval path and frontend demo promotions.
+  - Existing manual `discount_percent` remains separate; F7-04 rejects combining a promotion with nonzero manual discount.
+  - Strict TDD RED: the focused promotion suite reported 10 failures (`404` on the missing promotion API) and one passing manual-discount regression before implementation.
+  - GREEN: focused tests cover active inclusive-day quotes, checkout attribution, non-stacking, menudeo-only scope, invalid/unknown/inactive/future/expired promotions, stale checkout revalidation, operational-role reads/application, admin-only mutation, and the unchanged manual approval path.
+  - Added global promotion persistence, admin create/patch/deactivation, available-promotion listing, checkout locking/revalidation, and immutable sale name attribution. Open-ended start/end dates are supported.
+  - Writer checks: `cd backend && .venv/bin/pytest -q tests/test_promotions_phase7.py` → 13 passed; `cd backend && .venv/bin/pytest -q tests/test_promotions_phase7.py tests/test_domain_api.py` → 54 passed; full backend → 173 passed; Ruff → all checks passed.
+  - Independent focused verification verdict: PASS; noted residual risks that multi-line carts, exhaustive role matrix, and post-checkout promotion rename snapshot durability are not yet directly tested.
+  - Native review start returned candidate-scoped `consent-declined-this-candidate`; no lineage was created. Fallback verification path was satisfied by writer checks plus independent verifier.
+  - Quantity/gift/category/material/product scopes are deferred because they affect line allocation, inventory/returns, tax rounding, and receipt presentation.
+  - Work-unit commit was created as `feat(promotions): add cart percentage engine`; final amended identity is reported in session output because a commit cannot contain its own final hash.
 
 ### F7-05 — Profile/role/assignment admin slice
 

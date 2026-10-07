@@ -3,18 +3,21 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import ROUND_HALF_UP, Decimal
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.models.cash import CashMovement, CashMovementType, CashSession, CashSessionStatus, Terminal
 from app.models.catalog import Product, ProductVariant
 from app.models.clients import Client, ClientType, CreditEntry, CreditMovementType
 from app.models.identity import Branch, Role, UserProfile
 from app.models.inventory import StockBalance, StockEntry, StockMovementType
+from app.models.promotions import Promotion
 from app.models.repairs import Repair
 from app.models.sales import (
     DiscountApproval,
@@ -56,11 +59,47 @@ def money(value: Decimal | int) -> Decimal:
     return Decimal(value).quantize(CENT, rounding=ROUND_HALF_UP)
 
 
+def current_business_date() -> date:
+    return datetime.now(ZoneInfo(get_settings().business_timezone)).date()
+
+
+async def promotion_for_quote(
+    db: AsyncSession,
+    payload: QuoteCreate,
+    *,
+    lock: bool = False,
+) -> Promotion | None:
+    if payload.promotion_id is None:
+        return None
+    if payload.discount_percent != 0:
+        raise HTTPException(
+            status_code=422,
+            detail="Una promocion no se puede combinar con descuento manual",
+        )
+    if payload.sale_type.value != "menudeo":
+        raise HTTPException(status_code=422, detail="Las promociones solo aplican a menudeo")
+    statement = select(Promotion).where(Promotion.id == payload.promotion_id)
+    if lock:
+        statement = statement.with_for_update()
+    promotion = await db.scalar(statement)
+    if promotion is None:
+        raise HTTPException(status_code=404, detail="Promocion no encontrada")
+    today = current_business_date()
+    if (
+        not promotion.active
+        or (promotion.starts_on is not None and promotion.starts_on > today)
+        or (promotion.ends_on is not None and promotion.ends_on < today)
+    ):
+        raise HTTPException(status_code=409, detail="La promocion no esta vigente")
+    return promotion
+
+
 def quote_fingerprint(quote: QuoteRead) -> str:
     canonical = {
         "branch_id": str(quote.branch_id),
         "sale_type": quote.sale_type.value,
         "discount_percent": str(quote.discount_percent),
+        "promotion_id": quote.promotion_id,
         "lines": [
             {
                 "variant_id": line.variant_id,
@@ -91,6 +130,10 @@ async def build_quote(
     *,
     lock_stock: bool = False,
 ) -> QuoteRead:
+    promotion = await promotion_for_quote(db, payload, lock=lock_stock)
+    effective_discount_percent = (
+        promotion.discount_percent if promotion is not None else payload.discount_percent
+    )
     variant_ids = [item.variant_id for item in payload.items]
     if lock_stock:
         await db.execute(stock_balance_lock_statement(payload.branch_id, variant_ids))
@@ -135,7 +178,7 @@ async def build_quote(
             row["wholesale_price"] if payload.sale_type.value == "mayoreo" else row["retail_price"]
         )
         base = money(unit_price * requested.quantity)
-        discount = money(base * payload.discount_percent / Decimal(100))
+        discount = money(base * effective_discount_percent / Decimal(100))
         total = money(base - discount)
         tax = money(total * IVA_RATE / (Decimal(1) + IVA_RATE))
         subtotal = money(total - tax)
@@ -165,12 +208,16 @@ async def build_quote(
         sale_type=payload.sale_type,
         lines=lines,
         base=base,
-        discount_percent=payload.discount_percent,
+        discount_percent=effective_discount_percent,
         discount=discount,
+        promotion_id=promotion.id if promotion else None,
+        promotion_name=promotion.name if promotion else None,
         subtotal=subtotal,
         tax=tax,
         total=total,
-        approval_required=payload.discount_percent > DISCOUNT_LIMITS[profile.role],
+        approval_required=(
+            promotion is None and payload.discount_percent > DISCOUNT_LIMITS[profile.role]
+        ),
         fingerprint="",
     )
     result.fingerprint = quote_fingerprint(result)
@@ -224,6 +271,8 @@ async def _authorize_discount(
     quote: QuoteRead,
     profile: UserProfile,
 ) -> DiscountApproval | None:
+    if quote.promotion_id is not None:
+        return None
     if payload.discount_percent <= DISCOUNT_LIMITS[profile.role]:
         return None
     if payload.discount_approval_id is None:
@@ -323,6 +372,8 @@ async def checkout(
         total=quote.total,
         discount_approval_id=approval.id if approval else None,
         discount_approved_by=approval.approved_by if approval else None,
+        promotion_id=quote.promotion_id,
+        promotion_name=quote.promotion_name,
     )
     db.add(sale)
     await db.flush()
@@ -718,6 +769,8 @@ async def sale_detail(db: AsyncSession, sale_id: int) -> SaleDetailRead:
                     Sale.tax,
                     Sale.total,
                     Sale.discount_approved_by,
+                    Sale.promotion_id,
+                    Sale.promotion_name,
                     Sale.cancelled_at,
                     Sale.cancellation_reason,
                     Sale.created_at,

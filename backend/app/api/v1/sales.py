@@ -84,6 +84,8 @@ async def list_sales(
             Sale.tax,
             Sale.total,
             Sale.discount_approved_by,
+            Sale.promotion_id,
+            Sale.promotion_name,
             Sale.cancelled_at,
             Sale.cancellation_reason,
             Sale.created_at,

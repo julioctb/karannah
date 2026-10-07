@@ -10,6 +10,7 @@ from app.api.v1 import (
     catalog,
     clients,
     inventory,
+    promotions,
     repairs,
     reports,
     sales,
@@ -26,6 +27,7 @@ api_router.include_router(catalog.router)
 api_router.include_router(cash.router)
 api_router.include_router(inventory.router)
 api_router.include_router(clients.router)
+api_router.include_router(promotions.router)
 api_router.include_router(sales.router)
 api_router.include_router(repairs.router)
 api_router.include_router(reports.router)

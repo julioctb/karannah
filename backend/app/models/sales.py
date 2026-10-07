@@ -56,6 +56,11 @@ class Sale(Base):
             "condition <> 'credito' OR client_id IS NOT NULL",
             name="ck_sales_credit_client",
         ),
+        CheckConstraint(
+            "(promotion_id IS NULL AND promotion_name IS NULL) OR "
+            "(promotion_id IS NOT NULL AND promotion_name IS NOT NULL)",
+            name="ck_sales_promotion_attribution",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -95,6 +100,10 @@ class Sale(Base):
     discount_approved_by: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("user_profiles.id", ondelete="SET NULL"), nullable=True
     )
+    promotion_id: Mapped[int | None] = mapped_column(
+        ForeignKey("promotions.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    promotion_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     cancelled_by: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("user_profiles.id", ondelete="SET NULL"), nullable=True

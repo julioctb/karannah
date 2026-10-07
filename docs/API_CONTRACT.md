@@ -208,13 +208,31 @@ No existe registro publico.
 - `POST /cash/sessions/{id}/close` registra el efectivo contado, efectivo
   esperado y diferencia. Solo `encargado` y `admin` pueden cerrar caja.
 
+## Promociones
+
+- `GET /promotions` devuelve las promociones globales activas y vigentes en el
+  dia comercial de `BUSINESS_TIMEZONE`; esta disponible para todos los perfiles
+  operativos autenticados. `starts_on` y `ends_on` son inclusivas y pueden ser
+  `null` para dejar abierto el extremo correspondiente.
+- `POST /promotions` y `PATCH /promotions/{id}` requieren `admin`. La
+  desactivacion se realiza con `PATCH {"active": false}`; no existe borrado.
+- La primera regla soportada es un porcentaje sobre todo el carrito de menudeo.
+  El POS la selecciona explicitamente mediante `promotion_id`; el servidor no
+  elige promociones automaticamente y rechaza promociones en mayoreo.
+- Una promocion no se puede combinar con `discount_percent` manual. Su descuento
+  no requiere aprobacion de rol porque representa politica de precios central.
+- Quote y checkout validan nuevamente existencia, activacion y rango de fechas.
+  Checkout guarda `promotion_id` y el snapshot inmutable `promotion_name` en la
+  venta, junto con los snapshots monetarios existentes.
+
 ## Ventas
 
 - `GET /sales` es un listado resumido e incluye `seller_name` cuando el perfil
   del vendedor sigue activo, además de `status` y metadatos de cancelación.
 - `GET /sales/{id}` devuelve partidas, pagos, vendedor y snapshots de la venta.
 - `POST /sales/quote` recalcula precios, descuentos, impuestos, total y stock
-  disponible en el servidor.
+  disponible en el servidor. Acepta `promotion_id` explicito y devuelve
+  `promotion_id`/`promotion_name` cuando corresponde.
 - `POST /sales/checkout` vuelve a cotizar bajo bloqueo de inventario y persiste
   venta, partidas, pagos, movimientos de stock y crédito en una transacción.
 - El checkout requiere una sesión de caja abierta incluso cuando el pago no es

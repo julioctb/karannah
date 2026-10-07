@@ -23,6 +23,7 @@ class QuoteCreate(BaseModel):
     sale_type: SaleType = SaleType.MENUDEO
     items: list[QuoteItemCreate] = Field(min_length=1, max_length=100)
     discount_percent: Decimal = Field(default=Decimal(0), ge=0, le=100, decimal_places=2)
+    promotion_id: int | None = Field(default=None, gt=0)
 
     @model_validator(mode="after")
     def variants_must_be_unique(self) -> QuoteCreate:
@@ -54,6 +55,8 @@ class QuoteRead(BaseModel):
     base: Decimal
     discount_percent: Decimal
     discount: Decimal
+    promotion_id: int | None = None
+    promotion_name: str | None = None
     subtotal: Decimal
     tax: Decimal
     total: Decimal
@@ -122,6 +125,8 @@ class SaleRead(BaseModel):
     tax: Decimal = Decimal(0)
     total: Decimal
     discount_approved_by: uuid.UUID | None = None
+    promotion_id: int | None = None
+    promotion_name: str | None = None
     cancelled_at: datetime | None = None
     cancellation_reason: str | None = None
     created_at: datetime
