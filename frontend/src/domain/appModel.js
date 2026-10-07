@@ -10,6 +10,7 @@ export const API_READ_VIEWS = new Set([
   "physicalcount",
   "reports",
   "settings",
+  "users",
 ]);
 export const API_WRITE_VIEWS = new Set([
   "categories",
@@ -23,6 +24,7 @@ export const API_WRITE_VIEWS = new Set([
   "physicalcount",
   "reports",
   "settings",
+  "users",
 ]);
 
 export function mapCurrentUser(user) {
@@ -33,6 +35,8 @@ export function mapCurrentUser(user) {
     tipo: branch.code.startsWith("A") ? "almacen" : "tienda",
   }));
   return {
+    id: user.id,
+    email: user.email,
     nombre: user.full_name,
     rol: user.role,
     sucursal: branches[0] || null,

@@ -15,6 +15,7 @@ from app.api.v1 import (
     reports,
     sales,
     settings,
+    users,
 )
 from app.api.v1 import (
     me as me_routes,
@@ -32,3 +33,4 @@ api_router.include_router(sales.router)
 api_router.include_router(repairs.router)
 api_router.include_router(reports.router)
 api_router.include_router(settings.router)
+api_router.include_router(users.router)

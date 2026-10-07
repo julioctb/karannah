@@ -1055,7 +1055,9 @@ function Sidebar({ currentView: e, setView: t, user: a }) {
         label: "Sistema",
         items: [
           { id: "reports", label: "Reportes", icon: Icons.Reports },
-          { id: "users", label: "Usuarios", icon: Icons.Users },
+          ...(a.rol === "admin"
+            ? [{ id: "users", label: "Usuarios", icon: Icons.Users }]
+            : []),
           { id: "settings", label: "Configuración", icon: Icons.Settings },
         ],
       },
@@ -10604,7 +10606,303 @@ function ReportsView({ actions = {}, sucursales = [] }) {
     ),
   );
 }
-function UsersView() {
+function ApiUsersView({ currentUser, actions }) {
+  const [users, setUsers] = useState([]),
+    [loading, setLoading] = useState(true),
+    [error, setError] = useState(""),
+    [editing, setEditing] = useState(null),
+    [saving, setSaving] = useState(false);
+  const canManage = currentUser?.rol === "admin";
+  const loadUsers = async (signal) => {
+    if (!canManage) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      setUsers(await actions.getUsers(signal));
+    } catch (loadError) {
+      if (loadError.name !== "AbortError") setError(loadError.message);
+    } finally {
+      if (!signal?.aborted) setLoading(false);
+    }
+  };
+  useEffect(() => {
+    const controller = new AbortController();
+    loadUsers(controller.signal);
+    return () => controller.abort();
+  }, []);
+  const startEditing = (user) => {
+    setError("");
+    setEditing({
+      ...user,
+      branchIds: user.sucursales.map((branch) => branch.uuid),
+    });
+  };
+  const saveUser = async (event) => {
+    event.preventDefault();
+    if (!editing || saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      const saved = await actions.updateUser(editing.id, editing);
+      setUsers((current) =>
+        current.map((user) => (user.id === saved.id ? saved : user)),
+      );
+      setEditing(null);
+    } catch (saveError) {
+      setError(saveError.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+  if (!canManage)
+    return (
+      <MainLayout title="Usuarios">
+        <div className="card" style={{ padding: 24 }}>
+          <p style={{ color: "var(--muted)" }}>
+            La administración de usuarios está disponible solo para administradores.
+          </p>
+        </div>
+      </MainLayout>
+    );
+  return (
+    <MainLayout title="Usuarios">
+      <p style={{ color: "var(--muted)", fontSize: 12, marginBottom: 16 }}>
+        Administra perfiles existentes. Las altas, invitaciones y credenciales se
+        incorporarán con Supabase Auth Admin en la Fase 9.
+      </p>
+      {error && (
+        <div role="alert" className="card" style={{ padding: 16, marginBottom: 16 }}>
+          <p style={{ color: "var(--danger)", marginBottom: editing ? 0 : 8 }}>
+            {error}
+          </p>
+          {!editing && (
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => loadUsers()}
+            >
+              Reintentar
+            </button>
+          )}
+        </div>
+      )}
+      <div className="card">
+        {loading ? (
+          <p style={{ padding: 24, color: "var(--muted)" }}>Cargando usuarios…</p>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Usuario</th>
+                <th>Email</th>
+                <th>Rol</th>
+                <th>Sucursales</th>
+                <th>Estado</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((user) => (
+                <tr key={user.id}>
+                  <td style={{ fontWeight: 500 }}>{user.nombre}</td>
+                  <td style={{ color: "var(--muted)" }}>{user.email}</td>
+                  <td>
+                    <span
+                      className={`pill pill-${
+                        { admin: "danger", encargado: "gold", vendedor: "muted" }[
+                          user.rol
+                        ] || "muted"
+                      }`}
+                    >
+                      {user.rol}
+                    </span>
+                  </td>
+                  <td>
+                    {user.rol === "admin"
+                      ? "Todas las activas"
+                      : user.sucursales.map((branch) => branch.id).join(", ")}
+                  </td>
+                  <td>
+                    <span className={`pill pill-${user.activo ? "success" : "muted"}`}>
+                      {user.activo ? "Activo" : "Inactivo"}
+                    </span>
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      disabled={user.id === currentUser.id}
+                      title={
+                        user.id === currentUser.id
+                          ? "No puedes modificar tu propia cuenta"
+                          : "Editar perfil"
+                      }
+                      onClick={() => startEditing(user)}
+                    >
+                      Editar
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+      {editing && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 100,
+          }}
+        >
+          <div className="card" style={{ width: 480, padding: 24 }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 20,
+              }}
+            >
+              <h3 style={{ fontSize: 16, fontWeight: 600 }}>Editar Usuario</h3>
+              <button
+                type="button"
+                className="btn-ghost"
+                disabled={saving}
+                onClick={() => {
+                  setEditing(null);
+                  setError("");
+                }}
+              >
+                <Icons.Close />
+              </button>
+            </div>
+            <form onSubmit={saveUser}>
+              <label style={{ display: "block", fontSize: 12, marginBottom: 6 }}>
+                Nombre completo *
+              </label>
+              <input
+                type="text"
+                value={editing.nombre}
+                required
+                maxLength={160}
+                disabled={saving}
+                onChange={(event) =>
+                  setEditing((current) => ({
+                    ...current,
+                    nombre: event.target.value,
+                  }))
+                }
+                style={{ width: "100%", marginBottom: 12 }}
+              />
+              <label style={{ display: "block", fontSize: 12, marginBottom: 6 }}>
+                Email
+              </label>
+              <input
+                type="email"
+                value={editing.email}
+                disabled
+                style={{ width: "100%", marginBottom: 12 }}
+              />
+              <label style={{ display: "block", fontSize: 12, marginBottom: 6 }}>
+                Rol *
+              </label>
+              <select
+                value={editing.rol}
+                disabled={saving}
+                onChange={(event) =>
+                  setEditing((current) => ({
+                    ...current,
+                    rol: event.target.value,
+                    branchIds:
+                      event.target.value === "admin" ? [] : current.branchIds,
+                  }))
+                }
+                style={{ width: "100%", marginBottom: 12 }}
+              >
+                <option value="admin">Administrador</option>
+                <option value="encargado">Encargado</option>
+                <option value="vendedor">Vendedor</option>
+              </select>
+              {editing.rol !== "admin" && (
+                <>
+                  <label style={{ display: "block", fontSize: 12, marginBottom: 6 }}>
+                    Sucursales asignadas *
+                  </label>
+                  <select
+                    multiple
+                    required
+                    value={editing.branchIds}
+                    disabled={saving}
+                    onChange={(event) =>
+                      setEditing((current) => ({
+                        ...current,
+                        branchIds: Array.from(event.target.selectedOptions).map(
+                          (option) => option.value,
+                        ),
+                      }))
+                    }
+                    style={{ width: "100%", height: 96, marginBottom: 4 }}
+                  >
+                    {currentUser.sucursales.map((branch) => (
+                      <option key={branch.uuid} value={branch.uuid}>
+                        {branch.nombre} ({branch.id})
+                      </option>
+                    ))}
+                  </select>
+                  <p style={{ fontSize: 10, color: "var(--muted)", marginBottom: 12 }}>
+                    Ctrl/Cmd + clic para seleccionar múltiples
+                  </p>
+                </>
+              )}
+              <label
+                style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}
+              >
+                <input
+                  type="checkbox"
+                  checked={editing.activo}
+                  disabled={saving}
+                  onChange={(event) =>
+                    setEditing((current) => ({
+                      ...current,
+                      activo: event.target.checked,
+                    }))
+                  }
+                />
+                Usuario activo
+              </label>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  disabled={saving}
+                  onClick={() => {
+                    setEditing(null);
+                    setError("");
+                  }}
+                >
+                  Cancelar
+                </button>
+                <button type="submit" className="btn-primary" disabled={saving}>
+                  {saving ? "Guardando…" : "Guardar cambios"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </MainLayout>
+  );
+}
+function LegacyUsersView() {
   const [e, t] = useState(USUARIOS),
     [a, l] = useState(!1),
     [n, r] = useState(null);
@@ -11147,6 +11445,11 @@ function UsersView() {
         ),
       ),
   );
+}
+function UsersView({ currentUser, actions = {} }) {
+  if (actions.getUsers)
+    return <ApiUsersView currentUser={currentUser} actions={actions} />;
+  return <LegacyUsersView />;
 }
 function SettingsView({ currentUser, actions = {} }) {
   const [e, t] = useState("empresa"),

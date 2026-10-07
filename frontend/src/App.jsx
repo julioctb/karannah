@@ -40,6 +40,7 @@ import {
   getSalesSummaryReport,
   getTransferDetail,
   getTransfers,
+  getUsers,
   openCashSession,
   quoteSale,
   receiveTransfer,
@@ -55,6 +56,7 @@ import {
   updateProduct,
   updateRepair,
   updateSubcategory,
+  updateUser,
   updateVariant,
   uploadProductImage,
 } from "./lib/api.js";
@@ -272,6 +274,8 @@ export default function App() {
       getCreditRecoveryReport(token, options, signal),
     getSalesSummaryReport: (options, signal) =>
       getSalesSummaryReport(token, options, signal),
+    getUsers: (signal) => getUsers(token, signal),
+    updateUser: (userId, data) => updateUser(token, userId, data),
     getSaleDetail: (saleId, signal) =>
       getSaleDetail(token, saleId, user.branches || [], signal),
     getTransfers: (signal) =>

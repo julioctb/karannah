@@ -149,11 +149,24 @@ Start with the recommended first slice: server-side reports by business date and
 
 ### F7-05 — Profile/role/assignment admin slice
 
-- [ ] Map existing local auth/profile administration capabilities.
-- [ ] Add reviewable admin workflow through the auth adapter.
-- [ ] Keep Supabase Admin integration reserved for Phase 9.
+- [x] Map existing local auth/profile administration capabilities.
+- [x] Add reviewable admin workflow through the auth adapter.
+- [x] Keep Supabase Admin integration reserved for Phase 9.
 - Route: delegated writer after reports/config foundations.
-- Evidence: pending.
+- Selected slice: admin-only listing/editing of existing profiles, including full name, role, active state, and complete branch assignment replacement.
+- Product decisions: admins cannot edit/deactivate/demote their own account; the system must preserve at least one active admin; user creation/invitation is deferred to Phase 9; first list is simple with no search/pagination.
+- Evidence:
+  - Read-only exploration found identity tables, branch assignment rules, `/me` behavior, and local auth constraints already exist.
+  - Local auth previously bootstrapped fixed credentials and overwrote profile fields on login; it now creates missing local profiles only and preserves admin-managed fields and assignments.
+  - Added admin-only `GET /users` and `PATCH /users/{user_id}` with self-edit protection, active-admin preservation, active branch validation, and complete assignment replacement.
+  - Added a local profile-gate lifecycle boundary while reserving Supabase Auth Admin integration for Phase 9.
+  - The API-backed Usuarios screen lists and edits existing profiles with loading, error, and save states; non-admin navigation is hidden and no create, PIN, email, or credential mutation is exposed.
+  - Strict TDD RED: focused tests reported 8 failures against missing routes (`404`) before implementation; 2 initial `404` assertions were then tightened to verify error details.
+  - GREEN: focused identity administration tests pass (10 passed); identity plus local auth and `/me` regressions pass (31 passed).
+  - Full checks: backend pytest 184 passed; Ruff passed; frontend build passed with the pre-existing invalid `/* @__PURE__ */` annotation warning at `src/screens/index.jsx:4522`.
+  - Independent verification verdict: PASS; residual risks are SQLite-only concurrency coverage for active-admin protection, no automated frontend UI runner, and a legacy non-API fallback that still contains create/PIN UI outside normal API mode.
+  - Native review lineage `review-1b99f5fd54be9089` approved and acknowledged; authority burned for target `sha256:f25370322e06a3439afa6f0782f7623f75775b0ba61a90d0823eb6119edf83c3`.
+  - Work-unit commit was created as `feat(users): add profile administration`; final identity is reported in session output because a commit cannot contain its own final hash.
 
 ## Verification mode
 

@@ -31,9 +31,12 @@ also provide persisted API-backed operational workflows. The sales-period report
 uses the authenticated `GET /reports/sales-summary` endpoint with authorized branch
 and business-date filters. The company profile in Configuración reads and writes
 `/settings/company`; only administrators can save it, while every authenticated role
-can read it. Other settings sections, report previews, and promotions retain isolated
-browser/demo behavior until their corresponding slices. Supabase will be introduced
-in Phase 9 and used only for authentication.
+can read it. The Usuarios screen is API-backed for administrators and edits only
+existing profiles, roles, active state, and complete branch assignments; it does not
+create users or manage email, passwords, or PINs. Non-admin roles do not see its
+navigation entry. Other settings sections, report previews, and promotions retain
+isolated browser/demo behavior until their corresponding slices. Supabase will be
+introduced in Phase 9 and used only for authentication.
 
 Si npm falla con `EACCES` en la caché global, usa una caché temporal:
 

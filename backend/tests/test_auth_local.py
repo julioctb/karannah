@@ -16,7 +16,7 @@ from app.core import security
 from app.core.config import Settings
 from app.core.db import Base, get_db
 from app.main import app
-from app.models.identity import Branch, Role
+from app.models.identity import Branch, Role, UserBranchAssignment, UserProfile
 
 TEST_SECRET = "test-local-secret"
 TEST_AUDIENCE = "joyeria-local"
@@ -201,8 +201,6 @@ async def test_login_idempotente_no_duplica_perfles(client, session_factory):
         assert resp.status_code == 200
     from sqlalchemy import func, select
 
-    from app.models.identity import UserProfile
-
     async with session_factory() as s:
         total = (
             await s.execute(
@@ -212,6 +210,41 @@ async def test_login_idempotente_no_duplica_perfles(client, session_factory):
             )
         ).scalar_one()
     assert total == 1
+
+
+async def test_sync_local_users_preserves_admin_managed_profile_and_assignments(session_factory):
+    from sqlalchemy import select
+
+    async with session_factory() as session:
+        t02 = await session.scalar(select(Branch).where(Branch.code == "T02"))
+        assert t02 is not None
+        profile = UserProfile(
+            id=auth_local.local_user_id("vendedora@joyeria.local"),
+            email="vendedora@joyeria.local",
+            full_name="Nombre Administrado",
+            role=Role.ENCARGADO,
+            active=False,
+        )
+        session.add(profile)
+        await session.flush()
+        session.add(UserBranchAssignment(user_id=profile.id, branch_id=t02.id))
+        await session.commit()
+
+        await auth_local.sync_local_users(session)
+        await session.commit()
+        await session.refresh(profile)
+        branch_ids = set(
+            await session.scalars(
+                select(UserBranchAssignment.branch_id).where(
+                    UserBranchAssignment.user_id == profile.id
+                )
+            )
+        )
+
+    assert profile.full_name == "Nombre Administrado"
+    assert profile.role == Role.ENCARGADO
+    assert profile.active is False
+    assert branch_ids == {t02.id}
 
 
 async def test_login_devuelve_404_fuera_de_local(session_factory, monkeypatch):

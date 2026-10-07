@@ -39,8 +39,9 @@ No existe registro publico.
 - `POST /auth/local/login` solo existe cuando `AUTH_PROVIDER=local`.
 - Recibe `email` y `password` y devuelve `access_token`, `token_type`,
   `expires_in` y el perfil con sus sucursales.
-- Los usuarios locales son exclusivamente de desarrollo y se sincronizan al
-  ejecutar el seed o al iniciar sesion.
+- Los usuarios locales son exclusivamente de desarrollo. El seed o el inicio de
+  sesion solo crea perfiles locales faltantes; nunca reemplaza nombre, rol,
+  estado ni asignaciones administradas.
 - En produccion `AUTH_PROVIDER=local` esta prohibido.
 
 ## Identidad y sucursales
@@ -49,6 +50,21 @@ No existe registro publico.
 - `GET /me/branches` devuelve las sucursales autorizadas.
 - El frontend conserva `branch_id` como UUID y muestra `branch_code`.
 - `admin` ve todas las sucursales activas; los demas roles solo sus asignaciones.
+
+### Administracion de perfiles
+
+- `GET /users` requiere `admin` y lista perfiles existentes, incluidos los
+  inactivos, con `id`, `email`, `full_name`, `role`, `active` y sus asignaciones.
+- `PATCH /users/{user_id}` requiere `admin` y reemplaza en una sola operacion
+  `full_name`, `role`, `active` y la lista completa `branch_ids` (UUID).
+- Un administrador no puede modificar su propia cuenta. Siempre debe conservarse
+  al menos un administrador activo.
+- Los roles `encargado` y `vendedor` requieren al menos una sucursal activa. El
+  rol `admin` no almacena asignaciones porque ve todas las sucursales activas.
+- Usuarios o sucursales inexistentes/inactivas responden `404`; conflictos de
+  invariantes responden `409` y combinaciones invalidas responden `422`.
+- No hay endpoints para crear, invitar o eliminar usuarios ni para cambiar email,
+  contrasena o PIN. El ciclo de vida de Supabase Auth Admin se reserva para Fase 9.
 
 ## Catalogo e inventario
 

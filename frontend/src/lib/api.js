@@ -76,6 +76,40 @@ export function getMe(token, signal) {
   return request("/me", { token, signal });
 }
 
+function mapAdminUser(row) {
+  return {
+    id: row.id,
+    email: row.email,
+    nombre: row.full_name,
+    rol: row.role,
+    activo: row.active,
+    sucursales: row.branches.map((branch) => ({
+      id: branch.code,
+      uuid: branch.id,
+      nombre: branch.name,
+    })),
+  };
+}
+
+export function getUsers(token, signal) {
+  return request("/users", { token, signal }).then((rows) =>
+    rows.map(mapAdminUser),
+  );
+}
+
+export function updateUser(token, userId, user) {
+  return request(`/users/${userId}`, {
+    token,
+    method: "PATCH",
+    body: {
+      full_name: user.nombre,
+      role: user.rol,
+      active: user.activo,
+      branch_ids: user.rol === "admin" ? [] : user.branchIds,
+    },
+  }).then(mapAdminUser);
+}
+
 function mapCategory(row) {
   return {
     id: row.id,

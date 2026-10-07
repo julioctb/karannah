@@ -71,24 +71,24 @@ def local_user_id(email: str) -> uuid.UUID:
 
 
 async def sync_local_users(session: AsyncSession) -> int:
-    """Crea/actualiza los perfiles de los usuarios dev. Devuelve cuantos toco."""
-    touched = 0
+    """Bootstrap missing dev profiles without replacing admin-managed state."""
+    created = 0
     for dev_user in DEV_USERS:
         profile = (
             await session.execute(select(UserProfile).where(UserProfile.email == dev_user.email))
         ).scalar_one_or_none()
-        if profile is None:
-            profile = UserProfile(
-                id=local_user_id(dev_user.email),
-                email=dev_user.email,
-                full_name=dev_user.full_name,
-                role=dev_user.role,
-            )
-            session.add(profile)
-            await session.flush()
-        else:
-            profile.full_name = dev_user.full_name
-            profile.role = dev_user.role
+        if profile is not None:
+            continue
+
+        profile = UserProfile(
+            id=local_user_id(dev_user.email),
+            email=dev_user.email,
+            full_name=dev_user.full_name,
+            role=dev_user.role,
+        )
+        session.add(profile)
+        await session.flush()
+        created += 1
 
         if not dev_user.branch_codes:
             continue
@@ -97,16 +97,6 @@ async def sync_local_users(session: AsyncSession) -> int:
             .scalars()
             .all()
         )
-        existing = (
-            await session.execute(
-                select(UserBranchAssignment.branch_id).where(
-                    UserBranchAssignment.user_id == profile.id
-                )
-            )
-        ).scalars()
-        assigned = set(existing)
         for branch in branches:
-            if branch.id not in assigned:
-                session.add(UserBranchAssignment(user_id=profile.id, branch_id=branch.id))
-        touched += 1
-    return touched
+            session.add(UserBranchAssignment(user_id=profile.id, branch_id=branch.id))
+    return created
